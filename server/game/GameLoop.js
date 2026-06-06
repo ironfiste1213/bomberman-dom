@@ -10,7 +10,7 @@ export  default class GameLoop {
             const now = Date.now();
             this.lastTime = now
             this.game.tick();
-        }, 1000/150);
+        }, 1000/60);
     }
 
     stop() {
