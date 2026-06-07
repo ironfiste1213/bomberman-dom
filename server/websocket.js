@@ -30,9 +30,9 @@ export function acceptWebSocket(request, socket, onConnection) {
   // Protocol requirement:
   // acceptKey = base64(sha1(browserKey + WebSocketMagicGuid))
   const acceptKey = crypto
-    .createHash("sha1")
-    .update(key + WS_GUID)
-    .digest("base64");
+    .createHash("sha1") // creat a SHA-1 hashing machine
+    .update(key + WS_GUID)// feeds the string into the SHA-1 machine
+    .digest("base64");// after the SHA-1 hasing machine creata a bytes we convert them to base64, now it's safe to send in an HTTP headrer
 
   // HTTP 101 means "Switching Protocols".
   // After this response, the TCP socket is no longer normal HTTP.
