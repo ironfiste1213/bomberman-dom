@@ -15,7 +15,6 @@ export default class Game {
     }
 
     tick() {
-        console.log("tik tok hhhh ");
         PlayerSystem.update(this.state)
     }
 }

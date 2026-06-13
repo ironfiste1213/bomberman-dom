@@ -1,10 +1,14 @@
 import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { acceptWebSocket } from "./websocket.js";
 import { registerConnection } from "./lobby.js";
 import Game from "./game/Game.js";
 import GameLoop from "./game/GameLoop.js";
 
-
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC_DIR = path.resolve(__dirname, "../public");
 
 const game = new Game();
 const loop = new GameLoop(game);
@@ -15,6 +19,16 @@ loop.start();
 // If nothing is provided, the server uses port 3000 and listens on all interfaces.
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "0.0.0.0";
+
+const CONTENT_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon"
+};
 
 // This HTTP server does two jobs:
 // 1. answer normal HTTP requests, like /health
@@ -28,11 +42,33 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  // Default response when someone opens http://localhost:3000 in the browser.
-  // For now we only confirm the server is running.
-  response.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
-  response.end("Bomberman DOM server is running.\n");
+  serveStaticFile(request, response);
 });
+
+function serveStaticFile(request, response) {
+  const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+  const pathname = decodeURIComponent(url.pathname);
+  const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
+  const filePath = path.resolve(PUBLIC_DIR, relativePath);
+
+  if (!filePath.startsWith(`${PUBLIC_DIR}${path.sep}`) && filePath !== PUBLIC_DIR) {
+    response.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
+    response.end("Forbidden\n");
+    return;
+  }
+
+  fs.readFile(filePath, (error, contents) => {
+    if (error) {
+      response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      response.end("Not found\n");
+      return;
+    }
+
+    const contentType = CONTENT_TYPES[path.extname(filePath)] || "application/octet-stream";
+    response.writeHead(200, { "content-type": contentType });
+    response.end(contents);
+  });
+}
 
 // Browsers start WebSocket connections as an HTTP request with an "Upgrade" header.
 // Node exposes that moment through the "upgrade" event.
