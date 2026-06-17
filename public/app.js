@@ -7,12 +7,16 @@ const MESSAGE_TYPES = {
   LOBBY_STATE: "lobby:state",
   CHAT_MESSAGE: "chat:message",
   GAME_START: "game:start",
+  GAME_TICK: "game:tick",
+  GAME_OVER: "game:over",
+  PLAYER_DIED: "player:died",
   ERROR: "error"
 };
 
 const CLIENT_TYPES = {
   JOIN: "join",
-  CHAT_MESSAGE: "chat:message"
+  CHAT_MESSAGE: "chat:message",
+  PLAYER_INPUT: "player:input"
 };
 
 const SCREENS = {

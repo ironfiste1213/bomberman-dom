@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { acceptWebSocket } from "./websocket.js";
-import { registerConnection } from "./lobby.js";
+import { broadcastGameTick, registerConnection } from "./lobby.js";
 import Game from "./game/Game.js";
 import GameLoop from "./game/GameLoop.js";
 
@@ -11,7 +11,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, "../public");
 
 const game = new Game();
-const loop = new GameLoop(game);
+const loop = new GameLoop(game, (snapshot) => {
+  broadcastGameTick(snapshot);
+});
 
 loop.start();
 // Allow PORT/HOST to be changed from the terminal:
@@ -83,7 +85,12 @@ server.on("upgrade", (request, socket) => {
 
   // acceptWebSocket does the low-level WebSocket handshake.
   // registerConnection receives a cleaner object with .send() and .on().
-  acceptWebSocket(request, socket, registerConnection);
+  acceptWebSocket(request, socket, (connection) => {
+    registerConnection(connection, {
+      onGameStart: (players) => game.start(players),
+      onPlayerInput: (playerId, input) => game.setPlayerInput(playerId, input)
+    });
+  });
 });
 
 // Start listening for HTTP and WebSocket traffic.

@@ -13,6 +13,15 @@ export const SERVER_MESSAGES = {
   // Sent once the lobby countdown finishes and the game can begin.
   GAME_START: "game:start",
 
+  // Sent every game tick with a full state snapshot.
+  GAME_TICK: "game:tick",
+
+  // Sent when the match ends.
+  GAME_OVER: "game:over",
+
+  // Sent when a player loses a life.
+  PLAYER_DIED: "player:died",
+
   // Sent when the client sends something invalid or the action is refused.
   ERROR: "error"
 };
@@ -24,6 +33,9 @@ export const CLIENT_MESSAGES = {
 
   // Chat text typed by a joined player.
   CHAT_MESSAGE: "chat:message",
+
+  // Movement and action input during a match.
+  PLAYER_INPUT: "player:input",
 
   // Small connection test message. Useful later for latency/ping display.
   PING: "ping"

@@ -24,9 +24,19 @@ let countdownEndsAt = null;
 // Once true, new players cannot join this simple one-room server.
 let gameStarted = false;
 
+let gameHandlers = {
+  onGameStart: () => {},
+  onPlayerInput: () => {}
+};
+
 // Called once for every browser WebSocket connection.
 // At this point the browser is connected, but it has not joined the lobby yet.
-export function registerConnection(connection) {
+export function registerConnection(connection, handlers = {}) {
+  gameHandlers = {
+    ...gameHandlers,
+    ...handlers
+  };
+
   // The client object is our server-side record for one browser connection.
   const client = {
     // randomUUID gives every connection a unique id.
@@ -88,6 +98,17 @@ function handleMessage(client, rawMessage) {
   // Chat message from a real joined player.
   if (message.type === CLIENT_MESSAGES.CHAT_MESSAGE) {
     sendChatMessage(client, message.text);
+    return;
+  }
+
+  // Match input will be handled by the game loop; accept it as a valid message.
+  if (message.type === CLIENT_MESSAGES.PLAYER_INPUT) {
+    if (!gameStarted) {
+      send(client, SERVER_MESSAGES.ERROR, { message: "Game has not started yet." });
+      return;
+    }
+
+    gameHandlers.onPlayerInput(client.id, message.input);
     return;
   }
 
@@ -224,6 +245,8 @@ function startGame() {
     spawn: SPAWNS[index]
   }));
 
+  gameHandlers.onGameStart(gamePlayers);
+
   // The client will use this message to leave the waiting room and render the game.
   broadcast(SERVER_MESSAGES.GAME_START, {
     startedAt: Date.now(),
@@ -277,6 +300,11 @@ function broadcast(type, payload) {
   for (const player of players.values()) {
     send(player, type, payload);
   }
+}
+
+export function broadcastGameTick(payload) {
+  if (!gameStarted) return;
+  broadcast(SERVER_MESSAGES.GAME_TICK, payload);
 }
 
 // Converts a JS object into JSON and sends it through the WebSocket.

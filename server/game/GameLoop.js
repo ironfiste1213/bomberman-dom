@@ -1,6 +1,7 @@
 export  default class GameLoop {
-    constructor(game) {
+    constructor(game, onTick = () => {}) {
         this.game = game;
+        this.onTick = onTick;
         this.lastTime = Date.now();
         this.interval = null;
     }
@@ -10,6 +11,9 @@ export  default class GameLoop {
             const now = Date.now();
             this.lastTime = now
             this.game.tick();
+            if (this.game.started) {
+                this.onTick(this.game.snapshot());
+            }
         }, 1000/60);
     }
 
@@ -17,5 +21,4 @@ export  default class GameLoop {
         clearInterval(this.interval)
     }
 }
-
 

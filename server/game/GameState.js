@@ -7,5 +7,6 @@ export default class GameState {
         this.bombs =  [];
         this.powerups = [];
         this.blocks = [];
+        this.explosions = [];
     }
 }
