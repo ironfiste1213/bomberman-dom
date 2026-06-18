@@ -10,6 +10,7 @@ const MESSAGE_TYPES = {
   GAME_START: "game:start",
   SESSION_JOINED: "session:joined",
   SESSION_RESUMED: "session:resumed",
+  SESSION_LEFT: "session:left",
   GAME_OVER: "game:over",
   GAME_STATE: "game:state",
   ERROR: "error"
@@ -19,7 +20,8 @@ const CLIENT_TYPES = {
   JOIN: "join",
   CHAT_MESSAGE: "chat:message",
   INPUT: "player:input",
-  SESSION_RESUME: "session:resume"
+  SESSION_RESUME: "session:resume",
+  SESSION_LEAVE: "session:leave"
 };
 
 const ROUTES = {
@@ -55,6 +57,16 @@ const engine = {
     }
     this._startInput();
     this._startRAF();
+  },
+
+  stop() {
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    this.gameState = null;
+    this.map = [];
+    this.playerElems = {};
   },
 
   _startInput() {
@@ -132,6 +144,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(null);
+  const [resumeNotice, setResumeNotice] = useState(null);
   const [game, setGame] = useState(null);
   const [winner, setWinner] = useState(null);
   const [now, setNow] = useState(Date.now());
@@ -173,6 +186,7 @@ function App() {
         setMessages,
         setError,
         setBlocked,
+        setResumeNotice,
         setJoinedNickname,
         setGame,
         setWinner
@@ -236,6 +250,29 @@ function App() {
     }
   };
 
+  const clearLocalSession = () => {
+    clearStoredPlayerToken();
+    setJoinedNickname("");
+    setLobby(emptyLobby());
+    setGame(null);
+    setWinner(null);
+    setBlocked(null);
+    setResumeNotice(null);
+    setError("");
+    engine.stop();
+    navigate(ROUTES.NICKNAME);
+  };
+
+  const leaveSession = () => {
+    const didSend = send(socketRef.current, {
+      type: CLIENT_TYPES.SESSION_LEAVE
+    });
+
+    if (!didSend) {
+      clearLocalSession();
+    }
+  };
+
   const guardedRoute = resolveRoute(route, {
     joinedNickname,
     game,
@@ -248,6 +285,13 @@ function App() {
     { className: "shell" },
     Header(connection, lobby, joinedNickname, activeRoute, game),
     error ? h("p", { className: "notice", role: "alert" }, error) : null,
+    resumeNotice && !blocked
+      ? ResumeNotice({
+          notice: resumeNotice,
+          stay: () => setResumeNotice(null),
+          leave: leaveSession
+        })
+      : null,
     blocked
       ? BlockedScreen({
           blocked,
@@ -556,6 +600,23 @@ function BlockedScreen({ blocked, retry }) {
   );
 }
 
+function ResumeNotice({ notice, stay, leave }) {
+  const isGame = notice.phase === "game";
+
+  return h(
+    "section",
+    { className: "session-notice" },
+    h("div", null,
+      h("p", { className: "eyebrow" }, "Session restored"),
+      h("strong", null, isGame ? "Your match is already running." : "You are already in the lobby.")
+    ),
+    h("div", { className: "session-actions" },
+      h("button", { type: "button", onClick: stay }, isGame ? "Resume game" : "Stay in lobby"),
+      h("button", { type: "button", className: "button-danger", onClick: leave }, isGame ? "Leave match" : "Leave lobby")
+    )
+  );
+}
+
 function handleServerMessage(rawMessage, actions) {
   let message;
 
@@ -597,6 +658,7 @@ function handleServerMessage(rawMessage, actions) {
     }));
     actions.setJoinedNickname(payload.nickname || "");
     actions.setBlocked(null);
+    actions.setResumeNotice(null);
     actions.setError("");
     if (payload.phase === "game") {
       navigate(ROUTES.GAME);
@@ -614,12 +676,29 @@ function handleServerMessage(rawMessage, actions) {
     actions.setJoinedNickname(payload.nickname || "");
     actions.setError("");
     actions.setBlocked(null);
+    actions.setResumeNotice({
+      phase: payload.phase === "game" ? "game" : "lobby"
+    });
 
     if (payload.phase === "game") {
       navigate(ROUTES.GAME);
     } else {
       navigate(ROUTES.LOBBY);
     }
+    return;
+  }
+
+  if (message.type === MESSAGE_TYPES.SESSION_LEFT) {
+    clearStoredPlayerToken();
+    engine.stop();
+    actions.setJoinedNickname("");
+    actions.setLobby(emptyLobby());
+    actions.setGame(null);
+    actions.setWinner(null);
+    actions.setBlocked(null);
+    actions.setResumeNotice(null);
+    actions.setError("");
+    navigate(ROUTES.NICKNAME);
     return;
   }
 
@@ -647,8 +726,10 @@ function handleServerMessage(rawMessage, actions) {
     if (payload.code === "SESSION_EXPIRED") {
       clearStoredPlayerToken();
       actions.setJoinedNickname("");
+      actions.setLobby(emptyLobby());
       actions.setGame(null);
       actions.setWinner(null);
+      actions.setResumeNotice(null);
       navigate(ROUTES.NICKNAME);
     }
 

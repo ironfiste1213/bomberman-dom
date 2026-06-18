@@ -29,7 +29,8 @@ let gameStartPayload = null;
 
 let gameHandlers = {
   onGameStart: () => {},
-  onPlayerInput: () => {}
+  onPlayerInput: () => {},
+  onPlayerLeave: () => {}
 };
 
 // Called once for every browser WebSocket connection.
@@ -104,6 +105,11 @@ function handleMessage(client, rawMessage) {
   // This stops random connected sockets from chatting or controlling the game.
   if (!players.has(client.id)) {
     sendError(client, "JOIN_REQUIRED", "Join the lobby before sending messages.");
+    return;
+  }
+
+  if (message.type === CLIENT_MESSAGES.SESSION_LEAVE) {
+    leaveSession(client);
     return;
   }
 
@@ -240,6 +246,35 @@ function resumeSession(client, playerToken) {
   }
 }
 
+function leaveSession(client) {
+  const player = players.get(client.id);
+  if (!player) {
+    sendError(client, "JOIN_REQUIRED", "Join the lobby before leaving.");
+    return;
+  }
+
+  const phase = gameStarted ? "game" : "lobby";
+
+  send(player, SERVER_MESSAGES.SESSION_LEFT, { phase });
+  removePlayerSession(player);
+
+  if (gameStarted) {
+    gameHandlers.onPlayerLeave(player.id);
+    removePlayerFromGameStartPayload(player.id);
+  }
+
+  client.id = crypto.randomUUID();
+  client.nickname = null;
+  client.playerNumber = null;
+  client.joinedAt = null;
+  client.playerToken = null;
+  client.disconnectedAt = null;
+  client.cleanupTimer = null;
+
+  syncLobbyTimersAfterPlayerRemoval();
+  broadcastLobbyState();
+}
+
 // Sends one chat message to every player in the lobby.
 function sendChatMessage(client, text) {
   const cleanedText = sanitizeChatText(text);
@@ -335,21 +370,55 @@ function removeExpiredClient(playerId) {
   const player = players.get(playerId);
   if (!player || player.connection || !isResumeExpired(player)) return;
 
+  removePlayerSession(player);
+
+  syncLobbyTimersAfterPlayerRemoval();
+
+  broadcastLobbyState();
+}
+
+function removePlayerSession(player) {
   if (player.cleanupTimer) {
     clearTimeout(player.cleanupTimer);
     player.cleanupTimer = null;
   }
 
   players.delete(player.id);
+}
+
+function syncLobbyTimersAfterPlayerRemoval() {
+  if (gameStarted) return;
+
+  if (players.size === 0) {
+    clearLobbyTimer(waitingTimer);
+    clearLobbyTimer(countdownTimer);
+    waitingTimer = null;
+    countdownTimer = null;
+    waitingEndsAt = null;
+    countdownEndsAt = null;
+    return;
+  }
 
   // If we were counting down but dropped below 2 players, cancel the countdown.
-  if (!gameStarted && players.size < LOBBY.MIN_PLAYERS && countdownTimer) {
-    clearTimeout(countdownTimer);
+  if (players.size < LOBBY.MIN_PLAYERS && countdownTimer) {
+    clearLobbyTimer(countdownTimer);
     countdownTimer = null;
     countdownEndsAt = null;
   }
+}
 
-  broadcastLobbyState();
+function clearLobbyTimer(timer) {
+  if (timer) {
+    clearTimeout(timer);
+  }
+}
+
+function removePlayerFromGameStartPayload(playerId) {
+  if (!gameStartPayload || !Array.isArray(gameStartPayload.players)) return;
+  gameStartPayload = {
+    ...gameStartPayload,
+    players: gameStartPayload.players.filter((player) => player.id !== playerId)
+  };
 }
 
 // Sends the whole lobby state to every joined player.

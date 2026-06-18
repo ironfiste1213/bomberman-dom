@@ -88,7 +88,8 @@ server.on("upgrade", (request, socket) => {
   acceptWebSocket(request, socket, (connection) => {
     registerConnection(connection, {
       onGameStart: (players) => game.start(players),
-      onPlayerInput: (playerId, input) => game.setPlayerInput(playerId, input)
+      onPlayerInput: (playerId, input) => game.setPlayerInput(playerId, input),
+      onPlayerLeave: (playerId) => game.removePlayer(playerId)
     });
   });
 });

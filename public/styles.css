@@ -59,6 +59,12 @@ button:disabled {
   opacity: 0.55;
 }
 
+.button-danger {
+  background: transparent;
+  border-color: rgba(255, 107, 93, 0.75);
+  color: #ffd1cc;
+}
+
 input {
   width: 100%;
   min-height: 44px;
@@ -168,6 +174,28 @@ h2 {
   color: #ffd1cc;
   margin: 0;
   padding: 12px 14px;
+}
+
+.session-notice {
+  align-items: center;
+  background: rgba(240, 200, 90, 0.13);
+  border: 1px solid rgba(240, 200, 90, 0.46);
+  border-radius: 8px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.session-notice strong {
+  display: block;
+}
+
+.session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .panel {
@@ -401,6 +429,19 @@ h2 {
 
   .chat-form {
     grid-template-columns: 1fr;
+  }
+
+  .session-notice {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .session-actions {
+    justify-content: stretch;
+  }
+
+  .session-actions button {
+    width: 100%;
   }
 
   .arena-preview {

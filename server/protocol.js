@@ -19,6 +19,9 @@ export const SERVER_MESSAGES = {
   // Sent after a refreshed tab reconnects to its existing player session.
   SESSION_RESUMED: "session:resumed",
 
+  // Sent after a player intentionally leaves their temporary session.
+  SESSION_LEFT: "session:left",
+
   // Sent every game tick with a full state snapshot.
   GAME_TICK: "game:tick",
 
@@ -45,6 +48,9 @@ export const CLIENT_MESSAGES = {
 
   // Reconnect a refreshed tab to an existing temporary player session.
   SESSION_RESUME: "session:resume",
+
+  // Intentionally leave the current lobby/game session.
+  SESSION_LEAVE: "session:leave",
 
   // Small connection test message. Useful later for latency/ping display.
   PING: "ping"

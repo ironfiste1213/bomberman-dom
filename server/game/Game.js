@@ -34,6 +34,10 @@ export default class Game {
         };
     }
 
+    removePlayer(playerId) {
+        this.state.players.delete(playerId);
+    }
+
     tick() {
         if (!this.started) return;
         PlayerSystem.update(this.state)
