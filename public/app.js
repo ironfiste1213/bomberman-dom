@@ -8,9 +8,6 @@ const MESSAGE_TYPES = {
   LOBBY_STATE: "lobby:state",
   CHAT_MESSAGE: "chat:message",
   GAME_START: "game:start",
-  SESSION_JOINED: "session:joined",
-  SESSION_RESUMED: "session:resumed",
-  SESSION_LEFT: "session:left",
   GAME_OVER: "game:over",
   GAME_STATE: "game:state",
   ERROR: "error"
@@ -19,9 +16,7 @@ const MESSAGE_TYPES = {
 const CLIENT_TYPES = {
   JOIN: "join",
   CHAT_MESSAGE: "chat:message",
-  INPUT: "player:input",
-  SESSION_RESUME: "session:resume",
-  SESSION_LEAVE: "session:leave"
+  INPUT: "player:input"
 };
 
 const ROUTES = {
@@ -33,7 +28,6 @@ const ROUTES = {
 };
 
 const PLAYER_COLORS = ["red", "blue", "gold", "green"];
-const PLAYER_TOKEN_KEY = "bomberman:playerToken";
 
 // ---------------------------------------------------------------------------
 // Module-level game engine — lives entirely outside the component tree.
@@ -131,6 +125,7 @@ const engine = {
 
 function App() {
   const socketRef = useRef(null);
+  const connectionIdRef = useRef(null);
   const [route, setRoute] = useState(ROUTES.NICKNAME);
   const [connection, setConnection] = useState({
     status: "connecting",
@@ -144,7 +139,6 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(null);
-  const [resumeNotice, setResumeNotice] = useState(null);
   const [game, setGame] = useState(null);
   const [winner, setWinner] = useState(null);
   const [now, setNow] = useState(Date.now());
@@ -160,13 +154,6 @@ function App() {
 
     socket.addEventListener("open", () => {
       setConnection((current) => ({ ...current, status: "online" }));
-      const playerToken = getStoredPlayerToken();
-      if (playerToken) {
-        send(socket, {
-          type: CLIENT_TYPES.SESSION_RESUME,
-          playerToken
-        });
-      }
     });
 
     socket.addEventListener("close", () => {
@@ -181,12 +168,15 @@ function App() {
 
     socket.addEventListener("message", (event) => {
       handleServerMessage(event.data, {
+        getConnectionId: () => connectionIdRef.current,
+        setConnectionId: (id) => {
+          connectionIdRef.current = id;
+        },
         setConnection,
         setLobby,
         setMessages,
         setError,
         setBlocked,
-        setResumeNotice,
         setJoinedNickname,
         setGame,
         setWinner
@@ -250,29 +240,6 @@ function App() {
     }
   };
 
-  const clearLocalSession = () => {
-    clearStoredPlayerToken();
-    setJoinedNickname("");
-    setLobby(emptyLobby());
-    setGame(null);
-    setWinner(null);
-    setBlocked(null);
-    setResumeNotice(null);
-    setError("");
-    engine.stop();
-    navigate(ROUTES.NICKNAME);
-  };
-
-  const leaveSession = () => {
-    const didSend = send(socketRef.current, {
-      type: CLIENT_TYPES.SESSION_LEAVE
-    });
-
-    if (!didSend) {
-      clearLocalSession();
-    }
-  };
-
   const guardedRoute = resolveRoute(route, {
     joinedNickname,
     game,
@@ -285,13 +252,6 @@ function App() {
     { className: "shell" },
     Header(connection, lobby, joinedNickname, activeRoute, game),
     error ? h("p", { className: "notice", role: "alert" }, error) : null,
-    resumeNotice && !blocked
-      ? ResumeNotice({
-          notice: resumeNotice,
-          stay: () => setResumeNotice(null),
-          leave: leaveSession
-        })
-      : null,
     blocked
       ? BlockedScreen({
           blocked,
@@ -600,23 +560,6 @@ function BlockedScreen({ blocked, retry }) {
   );
 }
 
-function ResumeNotice({ notice, stay, leave }) {
-  const isGame = notice.phase === "game";
-
-  return h(
-    "section",
-    { className: "session-notice" },
-    h("div", null,
-      h("p", { className: "eyebrow" }, "Session restored"),
-      h("strong", null, isGame ? "Your match is already running." : "You are already in the lobby.")
-    ),
-    h("div", { className: "session-actions" },
-      h("button", { type: "button", onClick: stay }, isGame ? "Resume game" : "Stay in lobby"),
-      h("button", { type: "button", className: "button-danger", onClick: leave }, isGame ? "Leave match" : "Leave lobby")
-    )
-  );
-}
-
 function handleServerMessage(rawMessage, actions) {
   let message;
 
@@ -630,6 +573,7 @@ function handleServerMessage(rawMessage, actions) {
   const payload = message.payload || {};
 
   if (message.type === MESSAGE_TYPES.WELCOME) {
+    actions.setConnectionId(payload.id || null);
     actions.setConnection((current) => ({
       ...current,
       id: payload.id,
@@ -639,66 +583,22 @@ function handleServerMessage(rawMessage, actions) {
   }
 
   if (message.type === MESSAGE_TYPES.LOBBY_STATE) {
-    actions.setLobby(normalizeLobby(payload));
+    const lobby = normalizeLobby(payload);
+    const currentPlayer = lobby.players.find((player) => player.id === actions.getConnectionId());
+
+    actions.setLobby(lobby);
+
+    if (currentPlayer && !lobby.gameStarted) {
+      actions.setJoinedNickname(currentPlayer.nickname || "");
+      actions.setBlocked(null);
+      actions.setError("");
+      navigate(ROUTES.LOBBY);
+    }
     return;
   }
 
   if (message.type === MESSAGE_TYPES.CHAT_MESSAGE) {
     actions.setMessages((current) => [...current, payload].slice(-80));
-    return;
-  }
-
-  if (message.type === MESSAGE_TYPES.SESSION_JOINED) {
-    if (payload.playerToken) {
-      storePlayerToken(payload.playerToken);
-    }
-    actions.setConnection((current) => ({
-      ...current,
-      id: payload.playerId || current.id
-    }));
-    actions.setJoinedNickname(payload.nickname || "");
-    actions.setBlocked(null);
-    actions.setResumeNotice(null);
-    actions.setError("");
-    if (payload.phase === "game") {
-      navigate(ROUTES.GAME);
-    } else {
-      navigate(ROUTES.LOBBY);
-    }
-    return;
-  }
-
-  if (message.type === MESSAGE_TYPES.SESSION_RESUMED) {
-    actions.setConnection((current) => ({
-      ...current,
-      id: payload.playerId || current.id
-    }));
-    actions.setJoinedNickname(payload.nickname || "");
-    actions.setError("");
-    actions.setBlocked(null);
-    actions.setResumeNotice({
-      phase: payload.phase === "game" ? "game" : "lobby"
-    });
-
-    if (payload.phase === "game") {
-      navigate(ROUTES.GAME);
-    } else {
-      navigate(ROUTES.LOBBY);
-    }
-    return;
-  }
-
-  if (message.type === MESSAGE_TYPES.SESSION_LEFT) {
-    clearStoredPlayerToken();
-    engine.stop();
-    actions.setJoinedNickname("");
-    actions.setLobby(emptyLobby());
-    actions.setGame(null);
-    actions.setWinner(null);
-    actions.setBlocked(null);
-    actions.setResumeNotice(null);
-    actions.setError("");
-    navigate(ROUTES.NICKNAME);
     return;
   }
 
@@ -717,22 +617,14 @@ function handleServerMessage(rawMessage, actions) {
   }
 
   if (message.type === MESSAGE_TYPES.GAME_OVER) {
+    engine.stop();
+    actions.setGame(null);
     actions.setWinner(payload);
     navigate(ROUTES.WINNER);
     return;
   }
 
   if (message.type === MESSAGE_TYPES.ERROR) {
-    if (payload.code === "SESSION_EXPIRED") {
-      clearStoredPlayerToken();
-      actions.setJoinedNickname("");
-      actions.setLobby(emptyLobby());
-      actions.setGame(null);
-      actions.setWinner(null);
-      actions.setResumeNotice(null);
-      navigate(ROUTES.NICKNAME);
-    }
-
     if (payload.code === "GAME_ALREADY_STARTED") {
       actions.setJoinedNickname("");
       actions.setBlocked({
@@ -812,30 +704,6 @@ function send(socket, message) {
   if (!socket || socket.readyState !== WebSocket.OPEN) return false;
   socket.send(JSON.stringify(message));
   return true;
-}
-
-function getStoredPlayerToken() {
-  try {
-    return window.sessionStorage.getItem(PLAYER_TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function storePlayerToken(playerToken) {
-  try {
-    window.sessionStorage.setItem(PLAYER_TOKEN_KEY, playerToken);
-  } catch {
-    // Session resume is a convenience; the game can still run without storage.
-  }
-}
-
-function clearStoredPlayerToken() {
-  try {
-    window.sessionStorage.removeItem(PLAYER_TOKEN_KEY);
-  } catch {
-    // Ignore storage cleanup failures.
-  }
 }
 
 function emptyLobby() {
