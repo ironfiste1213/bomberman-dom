@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { CLIENT_MESSAGES, LOBBY, SERVER_MESSAGES, SPAWNS } from "./protocol.js";
 
+const RESUME_GRACE_MS = 30_000;
+
 // In-memory list of currently joined players.
 // Key = player id, value = client object.
 // This resets when the Node server restarts, which is fine for now.
@@ -23,6 +25,7 @@ let countdownEndsAt = null;
 
 // Once true, new players cannot join this simple one-room server.
 let gameStarted = false;
+let gameStartPayload = null;
 
 let gameHandlers = {
   onGameStart: () => {},
@@ -48,7 +51,10 @@ export function registerConnection(connection, handlers = {}) {
     // Filled only after the player sends a "join" message.
     nickname: null,
     playerNumber: null,
-    joinedAt: null
+    joinedAt: null,
+    playerToken: null,
+    disconnectedAt: null,
+    cleanupTimer: null
   };
 
   // Tell the browser that the WebSocket works and give it its server id.
@@ -62,9 +68,9 @@ export function registerConnection(connection, handlers = {}) {
     handleMessage(client, rawMessage);
   });
 
-  // When the browser tab closes or disconnects, remove it from the lobby.
+  // When the browser tab closes or disconnects, keep a short resume window.
   connection.on("close", () => {
-    removeClient(client);
+    markClientDisconnected(client, connection);
   });
 }
 
@@ -88,10 +94,16 @@ function handleMessage(client, rawMessage) {
     return;
   }
 
+  // A refreshed tab may reconnect before it is registered as a new player.
+  if (message.type === CLIENT_MESSAGES.SESSION_RESUME) {
+    resumeSession(client, message.playerToken);
+    return;
+  }
+
   // After this point, the client must already be in the players Map.
   // This stops random connected sockets from chatting or controlling the game.
   if (!players.has(client.id)) {
-    send(client, SERVER_MESSAGES.ERROR, { message: "Join the lobby before sending messages." });
+    sendError(client, "JOIN_REQUIRED", "Join the lobby before sending messages.");
     return;
   }
 
@@ -127,26 +139,26 @@ function joinLobby(client, nickname) {
   // This first version supports one match per server process.
   // Later we can add rooms if we want multiple matches at the same time.
   if (gameStarted) {
-    send(client, SERVER_MESSAGES.ERROR, { message: "A game is already running." });
+    sendError(client, "GAME_ALREADY_STARTED", "Game already started. Wait for the next match.");
     return;
   }
 
   // Prevent the same connection from joining twice.
   if (players.has(client.id)) {
-    send(client, SERVER_MESSAGES.ERROR, { message: "You are already in the lobby." });
+    sendError(client, "ALREADY_JOINED", "You are already in the lobby.");
     return;
   }
 
   // Subject says max 4 players.
   if (players.size >= LOBBY.MAX_PLAYERS) {
-    send(client, SERVER_MESSAGES.ERROR, { message: "Lobby is full." });
+    sendError(client, "LOBBY_FULL", "Lobby is full.");
     return;
   }
 
   // Clean nickname before storing it.
   const cleanedNickname = sanitizeNickname(nickname);
   if (!cleanedNickname) {
-    send(client, SERVER_MESSAGES.ERROR, { message: "Nickname must be 2-16 visible characters." });
+    sendError(client, "INVALID_NICKNAME", "Nickname must be 2-16 visible characters.");
     return;
   }
 
@@ -154,9 +166,13 @@ function joinLobby(client, nickname) {
   client.nickname = cleanedNickname;
   client.playerNumber = nextPlayerNumber++;
   client.joinedAt = Date.now();
+  client.playerToken = crypto.randomBytes(32).toString("hex");
+  client.disconnectedAt = null;
 
   // From this line, the client is officially in the lobby.
   players.set(client.id, client);
+
+  send(client, SERVER_MESSAGES.SESSION_JOINED, sessionPayload(client));
 
   // The first joined player starts the 20 second waiting timer.
   // If we reach at least 2 players by the end, the 10 second countdown starts.
@@ -183,6 +199,45 @@ function joinLobby(client, nickname) {
 
   // Send fresh lobby info to everyone after this join.
   broadcastLobbyState();
+}
+
+function resumeSession(client, playerToken) {
+  const player = findPlayerByToken(playerToken);
+
+  if (!player || isResumeExpired(player)) {
+    sendError(client, "SESSION_EXPIRED", "Session expired. Join again.");
+    return;
+  }
+
+  if (player.cleanupTimer) {
+    clearTimeout(player.cleanupTimer);
+    player.cleanupTimer = null;
+  }
+
+  const oldConnection = player.connection;
+
+  player.connection = client.connection;
+  player.disconnectedAt = null;
+
+  client.id = player.id;
+  client.nickname = player.nickname;
+  client.playerNumber = player.playerNumber;
+  client.joinedAt = player.joinedAt;
+  client.playerToken = player.playerToken;
+  client.disconnectedAt = null;
+  client.cleanupTimer = null;
+
+  if (oldConnection && oldConnection !== client.connection) {
+    oldConnection.close();
+  }
+
+  send(player, SERVER_MESSAGES.SESSION_RESUMED, sessionPayload(player));
+
+  if (gameStarted && gameStartPayload) {
+    send(player, SERVER_MESSAGES.GAME_START, gameStartPayload);
+  } else {
+    sendLobbyState(player);
+  }
 }
 
 // Sends one chat message to every player in the lobby.
@@ -246,18 +301,46 @@ function startGame() {
   }));
 
   gameHandlers.onGameStart(gamePlayers);
-
-  // The client will use this message to leave the waiting room and render the game.
-  broadcast(SERVER_MESSAGES.GAME_START, {
+  gameStartPayload = {
     startedAt: Date.now(),
     players: gamePlayers
-  });
+  };
+
+  // The client will use this message to leave the waiting room and render the game.
+  broadcast(SERVER_MESSAGES.GAME_START, gameStartPayload);
 }
 
-// Removes a player when their socket closes.
-function removeClient(client) {
-  // If this socket was never joined, there is nothing to remove.
-  if (!players.delete(client.id)) return;
+// Keeps a disconnected player resumable for a short refresh window.
+function markClientDisconnected(client, connection) {
+  const player = players.get(client.id);
+
+  // If this socket was never joined, there is nothing to preserve.
+  if (!player || player.connection !== connection) return;
+
+  player.connection = null;
+  player.disconnectedAt = Date.now();
+
+  if (player.cleanupTimer) {
+    clearTimeout(player.cleanupTimer);
+  }
+
+  player.cleanupTimer = setTimeout(() => {
+    removeExpiredClient(player.id);
+  }, RESUME_GRACE_MS);
+
+  broadcastLobbyState();
+}
+
+function removeExpiredClient(playerId) {
+  const player = players.get(playerId);
+  if (!player || player.connection || !isResumeExpired(player)) return;
+
+  if (player.cleanupTimer) {
+    clearTimeout(player.cleanupTimer);
+    player.cleanupTimer = null;
+  }
+
+  players.delete(player.id);
 
   // If we were counting down but dropped below 2 players, cancel the countdown.
   if (!gameStarted && players.size < LOBBY.MIN_PLAYERS && countdownTimer) {
@@ -272,13 +355,22 @@ function removeClient(client) {
 // Sends the whole lobby state to every joined player.
 // This is easier than sending tiny partial updates and keeps the client simple.
 function broadcastLobbyState() {
-  broadcast(SERVER_MESSAGES.LOBBY_STATE, {
+  broadcast(SERVER_MESSAGES.LOBBY_STATE, lobbyStatePayload());
+}
+
+function sendLobbyState(client) {
+  send(client, SERVER_MESSAGES.LOBBY_STATE, lobbyStatePayload());
+}
+
+function lobbyStatePayload() {
+  return {
     // Only send public player data.
     // Do not send socket objects or internal server fields.
     players: getPlayers().map((player) => ({
       id: player.id,
       nickname: player.nickname,
-      playerNumber: player.playerNumber
+      playerNumber: player.playerNumber,
+      connected: Boolean(player.connection)
     })),
     playerCount: players.size,
     minPlayers: LOBBY.MIN_PLAYERS,
@@ -286,7 +378,7 @@ function broadcastLobbyState() {
     waitingEndsAt,
     countdownEndsAt,
     gameStarted
-  });
+  };
 }
 
 // Returns players in stable order.
@@ -311,7 +403,34 @@ export function broadcastGameTick(payload) {
 // All server messages follow this shape:
 // { type: "some:type", payload: { ...data } }
 function send(client, type, payload) {
+  if (!client.connection) return;
   client.connection.send(JSON.stringify({ type, payload }));
+}
+
+function sendError(client, code, message) {
+  send(client, SERVER_MESSAGES.ERROR, { code, message });
+}
+
+function sessionPayload(player) {
+  return {
+    playerId: player.id,
+    playerToken: player.playerToken,
+    nickname: player.nickname,
+    playerNumber: player.playerNumber,
+    phase: gameStarted ? "game" : "lobby"
+  };
+}
+
+function findPlayerByToken(playerToken) {
+  if (typeof playerToken !== "string" || !playerToken) return null;
+  return getPlayers().find((player) => player.playerToken === playerToken) || null;
+}
+
+function isResumeExpired(player) {
+  return Boolean(
+    player.disconnectedAt &&
+    Date.now() - player.disconnectedAt > RESUME_GRACE_MS
+  );
 }
 
 // Makes sure nickname is usable before entering the lobby.

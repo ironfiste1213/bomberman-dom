@@ -8,6 +8,8 @@ const MESSAGE_TYPES = {
   LOBBY_STATE: "lobby:state",
   CHAT_MESSAGE: "chat:message",
   GAME_START: "game:start",
+  SESSION_JOINED: "session:joined",
+  SESSION_RESUMED: "session:resumed",
   GAME_OVER: "game:over",
   GAME_STATE: "game:state",
   ERROR: "error"
@@ -16,7 +18,8 @@ const MESSAGE_TYPES = {
 const CLIENT_TYPES = {
   JOIN: "join",
   CHAT_MESSAGE: "chat:message",
-  INPUT: "player:input"
+  INPUT: "player:input",
+  SESSION_RESUME: "session:resume"
 };
 
 const ROUTES = {
@@ -28,6 +31,7 @@ const ROUTES = {
 };
 
 const PLAYER_COLORS = ["red", "blue", "gold", "green"];
+const PLAYER_TOKEN_KEY = "bomberman:playerToken";
 
 // ---------------------------------------------------------------------------
 // Module-level game engine — lives entirely outside the component tree.
@@ -127,6 +131,7 @@ function App() {
   const [chatText, setChatText] = useState("");
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState("");
+  const [blocked, setBlocked] = useState(null);
   const [game, setGame] = useState(null);
   const [winner, setWinner] = useState(null);
   const [now, setNow] = useState(Date.now());
@@ -142,6 +147,13 @@ function App() {
 
     socket.addEventListener("open", () => {
       setConnection((current) => ({ ...current, status: "online" }));
+      const playerToken = getStoredPlayerToken();
+      if (playerToken) {
+        send(socket, {
+          type: CLIENT_TYPES.SESSION_RESUME,
+          playerToken
+        });
+      }
     });
 
     socket.addEventListener("close", () => {
@@ -160,6 +172,8 @@ function App() {
         setLobby,
         setMessages,
         setError,
+        setBlocked,
+        setJoinedNickname,
         setGame,
         setWinner
       });
@@ -187,6 +201,7 @@ function App() {
 
   const joinLobby = (event) => {
     event.preventDefault();
+    setBlocked(null);
     const cleanedNickname = nickname.trim().replace(/\s+/g, " ");
 
     if (cleanedNickname.length < 2 || cleanedNickname.length > 16) {
@@ -203,8 +218,6 @@ function App() {
     }
 
     setError("");
-    setJoinedNickname(cleanedNickname);
-    navigate(ROUTES.LOBBY);
   };
 
   const sendChat = (event) => {
@@ -235,7 +248,17 @@ function App() {
     { className: "shell" },
     Header(connection, lobby, joinedNickname, activeRoute, game),
     error ? h("p", { className: "notice", role: "alert" }, error) : null,
-    activeRoute === ROUTES.NICKNAME
+    blocked
+      ? BlockedScreen({
+          blocked,
+          retry: () => {
+            setBlocked(null);
+            setError("");
+            navigate(ROUTES.NICKNAME);
+          }
+        })
+      : null,
+    !blocked && activeRoute === ROUTES.NICKNAME
       ? NicknameScreen({
           nickname,
           setNickname,
@@ -243,7 +266,7 @@ function App() {
           connection
         })
       : null,
-    activeRoute === ROUTES.LOBBY
+    !blocked && activeRoute === ROUTES.LOBBY
       ? LobbyScreen({
           lobby,
           messages,
@@ -254,7 +277,7 @@ function App() {
           connection
         })
       : null,
-    activeRoute === ROUTES.GAME
+    !blocked && activeRoute === ROUTES.GAME
       ? GameScreen({
           game,
           messages,
@@ -263,13 +286,13 @@ function App() {
           sendChat
         })
       : null,
-    activeRoute === ROUTES.WINNER
+    !blocked && activeRoute === ROUTES.WINNER
       ? WinnerScreen({
           winner,
           navigateToNickname: () => navigate(ROUTES.NICKNAME)
         })
       : null,
-    activeRoute === "not-found"
+    !blocked && activeRoute === "not-found"
       ? NotFoundScreen({
           route,
           navigateToNickname: () => navigate(ROUTES.NICKNAME)
@@ -520,6 +543,19 @@ function NotFoundScreen({ route, navigateToNickname }) {
   );
 }
 
+function BlockedScreen({ blocked, retry }) {
+  return h(
+    "section",
+    { className: "panel nickname-panel" },
+    h("div", { className: "panel-copy" },
+      h("p", { className: "eyebrow" }, "Match unavailable"),
+      h("h2", null, "Match already in progress"),
+      h("p", null, blocked.message || "You can join when the next lobby opens.")
+    ),
+    h("button", { type: "button", onClick: retry }, "Retry")
+  );
+}
+
 function handleServerMessage(rawMessage, actions) {
   let message;
 
@@ -551,6 +587,42 @@ function handleServerMessage(rawMessage, actions) {
     return;
   }
 
+  if (message.type === MESSAGE_TYPES.SESSION_JOINED) {
+    if (payload.playerToken) {
+      storePlayerToken(payload.playerToken);
+    }
+    actions.setConnection((current) => ({
+      ...current,
+      id: payload.playerId || current.id
+    }));
+    actions.setJoinedNickname(payload.nickname || "");
+    actions.setBlocked(null);
+    actions.setError("");
+    if (payload.phase === "game") {
+      navigate(ROUTES.GAME);
+    } else {
+      navigate(ROUTES.LOBBY);
+    }
+    return;
+  }
+
+  if (message.type === MESSAGE_TYPES.SESSION_RESUMED) {
+    actions.setConnection((current) => ({
+      ...current,
+      id: payload.playerId || current.id
+    }));
+    actions.setJoinedNickname(payload.nickname || "");
+    actions.setError("");
+    actions.setBlocked(null);
+
+    if (payload.phase === "game") {
+      navigate(ROUTES.GAME);
+    } else {
+      navigate(ROUTES.LOBBY);
+    }
+    return;
+  }
+
   if (message.type === MESSAGE_TYPES.GAME_STATE) {
     console.log("CLIENT received game state:", payload);
     engine.gameState = payload;
@@ -572,6 +644,22 @@ function handleServerMessage(rawMessage, actions) {
   }
 
   if (message.type === MESSAGE_TYPES.ERROR) {
+    if (payload.code === "SESSION_EXPIRED") {
+      clearStoredPlayerToken();
+      actions.setJoinedNickname("");
+      actions.setGame(null);
+      actions.setWinner(null);
+      navigate(ROUTES.NICKNAME);
+    }
+
+    if (payload.code === "GAME_ALREADY_STARTED") {
+      actions.setJoinedNickname("");
+      actions.setBlocked({
+        code: payload.code,
+        message: payload.message || "Game already started. Wait for the next match."
+      });
+    }
+
     actions.setError(payload.message || "Server refused the action.");
     return;
   }
@@ -585,10 +673,19 @@ function resolveRoute(route, state) {
   }
 
   if (normalizedRoute === ROUTES.NICKNAME) {
+    if (state.game) {
+      return { route: ROUTES.GAME, redirectTo: ROUTES.GAME };
+    }
+    if (state.joinedNickname) {
+      return { route: ROUTES.LOBBY, redirectTo: ROUTES.LOBBY };
+    }
     return { route: ROUTES.NICKNAME };
   }
 
   if (normalizedRoute === ROUTES.LOBBY) {
+    if (state.game) {
+      return { route: ROUTES.GAME, redirectTo: ROUTES.GAME };
+    }
     if (!state.joinedNickname) {
       return { route: ROUTES.NICKNAME, redirectTo: ROUTES.NICKNAME };
     }
@@ -634,6 +731,30 @@ function send(socket, message) {
   if (!socket || socket.readyState !== WebSocket.OPEN) return false;
   socket.send(JSON.stringify(message));
   return true;
+}
+
+function getStoredPlayerToken() {
+  try {
+    return window.sessionStorage.getItem(PLAYER_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storePlayerToken(playerToken) {
+  try {
+    window.sessionStorage.setItem(PLAYER_TOKEN_KEY, playerToken);
+  } catch {
+    // Session resume is a convenience; the game can still run without storage.
+  }
+}
+
+function clearStoredPlayerToken() {
+  try {
+    window.sessionStorage.removeItem(PLAYER_TOKEN_KEY);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
 }
 
 function emptyLobby() {

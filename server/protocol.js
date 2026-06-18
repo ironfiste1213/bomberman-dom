@@ -13,6 +13,12 @@ export const SERVER_MESSAGES = {
   // Sent once the lobby countdown finishes and the game can begin.
   GAME_START: "game:start",
 
+  // Sent after a player joins and receives a temporary resumable session.
+  SESSION_JOINED: "session:joined",
+
+  // Sent after a refreshed tab reconnects to its existing player session.
+  SESSION_RESUMED: "session:resumed",
+
   // Sent every game tick with a full state snapshot.
   GAME_TICK: "game:tick",
 
@@ -36,6 +42,9 @@ export const CLIENT_MESSAGES = {
 
   // Movement and action input during a match.
   PLAYER_INPUT: "player:input",
+
+  // Reconnect a refreshed tab to an existing temporary player session.
+  SESSION_RESUME: "session:resume",
 
   // Small connection test message. Useful later for latency/ping display.
   PING: "ping"
