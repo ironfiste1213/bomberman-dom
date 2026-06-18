@@ -1,12 +1,14 @@
 import { createElement as h } from "./mini-framework/create-element.js";
 import { mount } from "./mini-framework/renderer.js";
 import { useEffect, useRef, useState } from "./mini-framework/hooks.js";
+import { initRouter, navigate } from "./mini-framework/router.js";
 
 const MESSAGE_TYPES = {
   WELCOME: "welcome",
   LOBBY_STATE: "lobby:state",
   CHAT_MESSAGE: "chat:message",
   GAME_START: "game:start",
+  GAME_OVER: "game:over",
   GAME_STATE: "game:state",
   ERROR: "error"
 };
@@ -17,10 +19,12 @@ const CLIENT_TYPES = {
   INPUT: "player:input"
 };
 
-const SCREENS = {
-  NICKNAME: "nickname",
-  LOBBY: "lobby",
-  GAME: "game"
+const ROUTES = {
+  HOME: "/",
+  NICKNAME: "/nickname",
+  LOBBY: "/lobby",
+  GAME: "/game",
+  WINNER: "/winner"
 };
 
 const PLAYER_COLORS = ["red", "blue", "gold", "green"];
@@ -111,7 +115,7 @@ const engine = {
 
 function App() {
   const socketRef = useRef(null);
-  const [screen, setScreen] = useState(SCREENS.NICKNAME);
+  const [route, setRoute] = useState(ROUTES.NICKNAME);
   const [connection, setConnection] = useState({
     status: "connecting",
     id: null,
@@ -124,7 +128,12 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState("");
   const [game, setGame] = useState(null);
+  const [winner, setWinner] = useState(null);
   const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    initRouter(setRoute, { mode: "hash" });
+  }, []);
 
   useEffect(() => {
     const socket = createSocket();
@@ -152,7 +161,7 @@ function App() {
         setMessages,
         setError,
         setGame,
-        setScreen
+        setWinner
       });
     });
 
@@ -163,6 +172,18 @@ function App() {
     const intervalId = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    const guardedRoute = resolveRoute(route, {
+      joinedNickname,
+      game,
+      winner
+    });
+
+    if (guardedRoute.redirectTo && guardedRoute.redirectTo !== route) {
+      navigate(guardedRoute.redirectTo);
+    }
+  }, [route, joinedNickname, game, winner]);
 
   const joinLobby = (event) => {
     event.preventDefault();
@@ -183,7 +204,7 @@ function App() {
 
     setError("");
     setJoinedNickname(cleanedNickname);
-    setScreen(SCREENS.LOBBY);
+    navigate(ROUTES.LOBBY);
   };
 
   const sendChat = (event) => {
@@ -202,12 +223,19 @@ function App() {
     }
   };
 
+  const guardedRoute = resolveRoute(route, {
+    joinedNickname,
+    game,
+    winner
+  });
+  const activeRoute = guardedRoute.route;
+
   return h(
     "main",
     { className: "shell" },
-    Header(connection, lobby, joinedNickname, screen, game),
+    Header(connection, lobby, joinedNickname, activeRoute, game),
     error ? h("p", { className: "notice", role: "alert" }, error) : null,
-    screen === SCREENS.NICKNAME
+    activeRoute === ROUTES.NICKNAME
       ? NicknameScreen({
           nickname,
           setNickname,
@@ -215,7 +243,7 @@ function App() {
           connection
         })
       : null,
-    screen === SCREENS.LOBBY
+    activeRoute === ROUTES.LOBBY
       ? LobbyScreen({
           lobby,
           messages,
@@ -226,7 +254,7 @@ function App() {
           connection
         })
       : null,
-    screen === SCREENS.GAME
+    activeRoute === ROUTES.GAME
       ? GameScreen({
           game,
           messages,
@@ -234,12 +262,24 @@ function App() {
           setChatText,
           sendChat
         })
+      : null,
+    activeRoute === ROUTES.WINNER
+      ? WinnerScreen({
+          winner,
+          navigateToNickname: () => navigate(ROUTES.NICKNAME)
+        })
+      : null,
+    activeRoute === "not-found"
+      ? NotFoundScreen({
+          route,
+          navigateToNickname: () => navigate(ROUTES.NICKNAME)
+        })
       : null
   );
 }
 
-function Header(connection, lobby, joinedNickname, screen, game) {
-  const visibleCount = screen === SCREENS.GAME && game && Array.isArray(game.players)
+function Header(connection, lobby, joinedNickname, route, game) {
+  const visibleCount = route === ROUTES.GAME && game && Array.isArray(game.players)
     ? game.players.length
     : lobby.playerCount;
   const maxPlayers = lobby.maxPlayers || connection.maxPlayers;
@@ -448,6 +488,38 @@ function GameScreen({ game, messages, chatText, setChatText, sendChat }) {
   );
 }
 
+function WinnerScreen({ winner, navigateToNickname }) {
+  const player = winner && (winner.winner || winner.player || winner);
+  const winnerName = player && (player.nickname || player.name);
+  const winnerNumber = player && player.playerNumber ? `P${player.playerNumber}` : "";
+
+  return h(
+    "section",
+    { className: "panel nickname-panel" },
+    h("div", { className: "panel-copy" },
+      h("p", { className: "eyebrow" }, "Match complete"),
+      h("h2", null, winnerName ? `${winnerName} wins` : "Winner locked"),
+      h("p", null, winnerName
+        ? `${winnerNumber ? `${winnerNumber} - ` : ""}${winnerName} is the last player standing.`
+        : "The winner page is ready. Final winner data will arrive from the backend game:over message.")
+    ),
+    h("button", { type: "button", onClick: navigateToNickname }, "Back to nickname")
+  );
+}
+
+function NotFoundScreen({ route, navigateToNickname }) {
+  return h(
+    "section",
+    { className: "panel nickname-panel" },
+    h("div", { className: "panel-copy" },
+      h("p", { className: "eyebrow" }, "Route not found"),
+      h("h2", null, "This page does not exist"),
+      h("p", null, `No Bomberman page matches ${route}.`)
+    ),
+    h("button", { type: "button", onClick: navigateToNickname }, "Back to nickname")
+  );
+}
+
 function handleServerMessage(rawMessage, actions) {
   let message;
 
@@ -487,9 +559,15 @@ function handleServerMessage(rawMessage, actions) {
 
   if (message.type === MESSAGE_TYPES.GAME_START) {
     actions.setGame(payload);
-    actions.setScreen(SCREENS.GAME);
+    navigate(ROUTES.GAME);
     // engine.socket is already set; start input capture + RAF loop once.
     engine.start(engine.socket, payload.map);
+    return;
+  }
+
+  if (message.type === MESSAGE_TYPES.GAME_OVER) {
+    actions.setWinner(payload);
+    navigate(ROUTES.WINNER);
     return;
   }
 
@@ -497,6 +575,54 @@ function handleServerMessage(rawMessage, actions) {
     actions.setError(payload.message || "Server refused the action.");
     return;
   }
+}
+
+function resolveRoute(route, state) {
+  const normalizedRoute = normalizeRoute(route);
+
+  if (normalizedRoute === ROUTES.HOME) {
+    return { route: ROUTES.NICKNAME, redirectTo: ROUTES.NICKNAME };
+  }
+
+  if (normalizedRoute === ROUTES.NICKNAME) {
+    return { route: ROUTES.NICKNAME };
+  }
+
+  if (normalizedRoute === ROUTES.LOBBY) {
+    if (!state.joinedNickname) {
+      return { route: ROUTES.NICKNAME, redirectTo: ROUTES.NICKNAME };
+    }
+    return { route: ROUTES.LOBBY };
+  }
+
+  if (normalizedRoute === ROUTES.GAME) {
+    if (!state.game) {
+      return {
+        route: state.joinedNickname ? ROUTES.LOBBY : ROUTES.NICKNAME,
+        redirectTo: state.joinedNickname ? ROUTES.LOBBY : ROUTES.NICKNAME
+      };
+    }
+    return { route: ROUTES.GAME };
+  }
+
+  if (normalizedRoute === ROUTES.WINNER) {
+    if (!state.winner) {
+      const fallbackRoute = state.game
+        ? ROUTES.GAME
+        : state.joinedNickname
+          ? ROUTES.LOBBY
+          : ROUTES.NICKNAME;
+      return { route: fallbackRoute, redirectTo: fallbackRoute };
+    }
+    return { route: ROUTES.WINNER };
+  }
+
+  return { route: "not-found" };
+}
+
+function normalizeRoute(route) {
+  if (!route || typeof route !== "string") return ROUTES.HOME;
+  return route.startsWith("/") ? route : `/${route}`;
 }
 
 function createSocket() {
