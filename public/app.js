@@ -7,16 +7,14 @@ const MESSAGE_TYPES = {
   LOBBY_STATE: "lobby:state",
   CHAT_MESSAGE: "chat:message",
   GAME_START: "game:start",
-  GAME_TICK: "game:tick",
-  GAME_OVER: "game:over",
-  PLAYER_DIED: "player:died",
+  GAME_STATE: "game:state",
   ERROR: "error"
 };
 
 const CLIENT_TYPES = {
   JOIN: "join",
   CHAT_MESSAGE: "chat:message",
-  PLAYER_INPUT: "player:input"
+  INPUT: "player:input"
 };
 
 const SCREENS = {
@@ -26,6 +24,90 @@ const SCREENS = {
 };
 
 const PLAYER_COLORS = ["red", "blue", "gold", "green"];
+
+// ---------------------------------------------------------------------------
+// Module-level game engine — lives entirely outside the component tree.
+// Started once when the server sends game:start.
+// ---------------------------------------------------------------------------
+const engine = {
+  socket: null,       // set when WS connects
+  gameState: null,    // latest snapshot from server
+  map: [],            // set when game starts
+  rafId: null,
+  playerElems: {},
+  inputBound: false,
+
+  start(socket, map) {
+    this.socket = socket;
+    this.map = map || [];
+    this.playerElems = {};
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    this._startInput();
+    this._startRAF();
+  },
+
+  _startInput() {
+    if (this.inputBound) return;
+    this.inputBound = true;
+
+    const keys = { up: false, down: false, left: false, right: false };
+    const KEY_MAP = {
+      ArrowUp: "up", w: "up",
+      ArrowDown: "down", s: "down",
+      ArrowLeft: "left", a: "left",
+      ArrowRight: "right", d: "right"
+    };
+    const push = () => {
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+      console.log("CLIENT sending input:", keys);
+      this.socket.send(JSON.stringify({ type: CLIENT_TYPES.INPUT, input: { ...keys } }));
+    };
+    window.addEventListener("keydown", (e) => {
+      const dir = KEY_MAP[e.key];
+      if (!dir) return;
+      e.preventDefault();
+      if (keys[dir]) return;
+      keys[dir] = true;
+      push();
+    });
+    window.addEventListener("keyup", (e) => {
+      const dir = KEY_MAP[e.key];
+      if (!dir) return;
+      e.preventDefault();
+      keys[dir] = false;
+      push();
+    });
+  },
+
+  _startRAF() {
+    const loop = () => {
+      const MAP_COLS = this.map[0]?.length || 11;
+      const MAP_ROWS = this.map.length || 7;
+      const state = this.gameState;
+      const arena = document.getElementById("arena");
+      if (state && arena) {
+        for (const p of state.players) {
+          let el = this.playerElems[p.id];
+          if (!el) {
+            el = document.createElement("div");
+            el.className = `player-sprite token-${PLAYER_COLORS[(p.playerNumber - 1) % PLAYER_COLORS.length]}`;
+            el.title = p.nickname;
+            el.textContent = p.playerNumber;
+            arena.appendChild(el);
+            this.playerElems[p.id] = el;
+          }
+          el.style.left = `${(p.x / MAP_COLS) * 100}%`;
+          el.style.top  = `${(p.y / MAP_ROWS) * 100}%`;
+        }
+      }
+      this.rafId = requestAnimationFrame(loop);
+    };
+    this.rafId = requestAnimationFrame(loop);
+  }
+};
 
 function App() {
   const socketRef = useRef(null);
@@ -47,6 +129,7 @@ function App() {
   useEffect(() => {
     const socket = createSocket();
     socketRef.current = socket;
+    engine.socket = socket; // give engine direct socket access
 
     socket.addEventListener("open", () => {
       setConnection((current) => ({ ...current, status: "online" }));
@@ -307,6 +390,25 @@ function ChatMessage(message) {
 
 function GameScreen({ game, messages, chatText, setChatText, sendChat }) {
   const players = game && Array.isArray(game.players) ? game.players : [];
+  const map = game && Array.isArray(game.map) ? game.map : [];
+
+  const tiles = [];
+  if (map.length > 0) {
+    for (let r = 0; r < map.length; r++) {
+      for (let c = 0; c < map[r].length; c++) {
+        const cell = map[r][c];
+        let className = "tile-floor";
+        if (cell === "#") className = "tile-wall";
+        tiles.push(h("div", {
+          className: `tile ${className}`,
+          style: `grid-column: ${c + 1}; grid-row: ${r + 1};`
+        }));
+      }
+    }
+  }
+
+  const cols = map[0]?.length || 11;
+  const rows = map.length || 7;
 
   return h(
     "section",
@@ -315,11 +417,17 @@ function GameScreen({ game, messages, chatText, setChatText, sendChat }) {
       "div",
       { className: "panel arena-panel" },
       h("div", { className: "section-heading" },
-        h("p", { className: "eyebrow" }, "Match signal received"),
-        h("h2", null, "Game screen armed")
+        h("p", { className: "eyebrow" }, "Match in progress"),
+        h("h2", null, "Arena")
       ),
-      h("div", { className: "arena-preview" },
-        players.map((player, index) => SpawnMarker(player, index))
+      h(
+        "div",
+        {
+          id: "arena",
+          className: "arena-preview",
+          style: `display: grid; grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, 1fr); gap: 0;`
+        },
+        ...tiles
       ),
       h("ul", { className: "hud-list" },
         players.map((player, index) => h(
@@ -337,22 +445,6 @@ function GameScreen({ game, messages, chatText, setChatText, sendChat }) {
       setChatText,
       sendChat
     })
-  );
-}
-
-function SpawnMarker(player, index) {
-  const spawn = player.spawn || { x: 1, y: 1 };
-  const left = (spawn.x / 14) * 100;
-  const top = (spawn.y / 12) * 100;
-
-  return h(
-    "span",
-    {
-      className: `spawn-marker token-${PLAYER_COLORS[index % PLAYER_COLORS.length]}`,
-      key: player.id,
-      style: `left: ${left}%; top: ${top}%;`
-    },
-    player.playerNumber
   );
 }
 
@@ -387,9 +479,17 @@ function handleServerMessage(rawMessage, actions) {
     return;
   }
 
+  if (message.type === MESSAGE_TYPES.GAME_STATE) {
+    console.log("CLIENT received game state:", payload);
+    engine.gameState = payload;
+    return;
+  }
+
   if (message.type === MESSAGE_TYPES.GAME_START) {
     actions.setGame(payload);
     actions.setScreen(SCREENS.GAME);
+    // engine.socket is already set; start input capture + RAF loop once.
+    engine.start(engine.socket, payload.map);
     return;
   }
 
