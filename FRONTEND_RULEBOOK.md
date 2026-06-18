@@ -101,6 +101,48 @@ Server sends:
 }
 ```
 
+Expected match result message:
+
+```json
+{
+  "type": "game:over",
+  "payload": {
+    "winner": {
+      "id": "player-id",
+      "nickname": "player-name",
+      "playerNumber": 1
+    },
+    "players": [
+      {
+        "id": "player-id",
+        "nickname": "player-name",
+        "playerNumber": 1,
+        "lives": 1,
+        "alive": true,
+        "result": "winner"
+      },
+      {
+        "id": "other-player-id",
+        "nickname": "other-player",
+        "playerNumber": 2,
+        "lives": 0,
+        "alive": false,
+        "result": "loser"
+      }
+    ],
+    "reason": "last_player_standing",
+    "endedAt": 0
+  }
+}
+```
+
+Game-over frontend rules:
+
+- `winner.id` is the source of truth for the winner.
+- `players[].result` may be `"winner"`, `"loser"`, or omitted.
+- If `players` is missing, the frontend still shows the winner if `winner` exists.
+- The frontend must not invent final game results.
+
 Errors use:
 
 ```json

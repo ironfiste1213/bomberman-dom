@@ -140,7 +140,7 @@ function App() {
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(null);
   const [game, setGame] = useState(null);
-  const [winner, setWinner] = useState(null);
+  const [matchResult, setMatchResult] = useState(null);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -179,7 +179,7 @@ function App() {
         setBlocked,
         setJoinedNickname,
         setGame,
-        setWinner
+        setMatchResult
       });
     });
 
@@ -195,13 +195,13 @@ function App() {
     const guardedRoute = resolveRoute(route, {
       joinedNickname,
       game,
-      winner
+      matchResult
     });
 
     if (guardedRoute.redirectTo && guardedRoute.redirectTo !== route) {
       navigate(guardedRoute.redirectTo);
     }
-  }, [route, joinedNickname, game, winner]);
+  }, [route, joinedNickname, game, matchResult]);
 
   const joinLobby = (event) => {
     event.preventDefault();
@@ -240,10 +240,20 @@ function App() {
     }
   };
 
+  const returnToNickname = () => {
+    setMatchResult(null);
+    setJoinedNickname("");
+    setLobby(emptyLobby());
+    setGame(null);
+    setBlocked(null);
+    setError("");
+    navigate(ROUTES.NICKNAME);
+  };
+
   const guardedRoute = resolveRoute(route, {
     joinedNickname,
     game,
-    winner
+    matchResult
   });
   const activeRoute = guardedRoute.route;
 
@@ -291,9 +301,10 @@ function App() {
         })
       : null,
     !blocked && activeRoute === ROUTES.WINNER
-      ? WinnerScreen({
-          winner,
-          navigateToNickname: () => navigate(ROUTES.NICKNAME)
+      ? ResultScreen({
+          matchResult,
+          currentPlayerId: connection.id,
+          navigateToNickname: returnToNickname
         })
       : null,
     !blocked && activeRoute === "not-found"
@@ -515,22 +526,58 @@ function GameScreen({ game, messages, chatText, setChatText, sendChat }) {
   );
 }
 
-function WinnerScreen({ winner, navigateToNickname }) {
-  const player = winner && (winner.winner || winner.player || winner);
-  const winnerName = player && (player.nickname || player.name);
-  const winnerNumber = player && player.playerNumber ? `P${player.playerNumber}` : "";
+function ResultScreen({ matchResult, currentPlayerId, navigateToNickname }) {
+  const winner = matchResult && matchResult.winner;
+  const players = matchResult && Array.isArray(matchResult.players) ? matchResult.players : [];
+  const currentPlayer = players.find((player) => player.id === currentPlayerId);
+  const didWin = Boolean(winner && winner.id && winner.id === currentPlayerId);
+  const didLose = Boolean(currentPlayer && (currentPlayer.result === "loser" || currentPlayer.alive === false));
+  const resultTone = didWin ? "win" : didLose ? "lose" : "neutral";
+  const title = didWin ? "You won" : didLose ? "You were eliminated" : "Match complete";
+  const winnerName = displayPlayerName(winner);
+  const winnerNumber = winner && winner.playerNumber ? `P${winner.playerNumber}` : "";
+  const reason = resultReasonLabel(matchResult && matchResult.reason);
 
   return h(
     "section",
-    { className: "panel nickname-panel" },
+    { className: "panel result-panel" },
     h("div", { className: "panel-copy" },
-      h("p", { className: "eyebrow" }, "Match complete"),
-      h("h2", null, winnerName ? `${winnerName} wins` : "Winner locked"),
+      h("p", { className: "eyebrow" }, "Match result"),
+      h("h2", null, title),
       h("p", null, winnerName
-        ? `${winnerNumber ? `${winnerNumber} - ` : ""}${winnerName} is the last player standing.`
-        : "The winner page is ready. Final winner data will arrive from the backend game:over message.")
+        ? `${winnerNumber ? `${winnerNumber} - ` : ""}${winnerName} wins. ${reason}`
+        : "The match ended. Waiting for final winner details from the backend.")
     ),
+    h(
+      "div",
+      { className: `result-card result-${resultTone}` },
+      h("span", { className: "result-badge" }, didWin ? "Winner" : didLose ? "Eliminated" : "Complete"),
+      currentPlayer
+        ? h("strong", null, `Your result: ${displayPlayerName(currentPlayer)}`)
+        : h("strong", null, "Spectator result"),
+      h("small", null, winnerName ? `Winner: ${winnerName}` : "Winner data unavailable")
+    ),
+    players.length
+      ? h(
+          "ul",
+          { className: "result-list" },
+          players.map((player, index) => ResultPlayerRow(player, index, winner))
+        )
+      : null,
     h("button", { type: "button", onClick: navigateToNickname }, "Back to nickname")
+  );
+}
+
+function ResultPlayerRow(player, index, winner) {
+  const isWinner = Boolean(winner && winner.id && winner.id === player.id);
+  const result = isWinner ? "winner" : player.result || (player.alive === false ? "loser" : "finished");
+
+  return h(
+    "li",
+    { className: "result-row", key: player.id || `${player.nickname}-${index}` },
+    h("span", { className: `player-token token-${PLAYER_COLORS[index % PLAYER_COLORS.length]}` }, player.playerNumber || index + 1),
+    h("strong", null, displayPlayerName(player)),
+    h("small", null, result)
   );
 }
 
@@ -619,7 +666,7 @@ function handleServerMessage(rawMessage, actions) {
   if (message.type === MESSAGE_TYPES.GAME_OVER) {
     engine.stop();
     actions.setGame(null);
-    actions.setWinner(payload);
+    actions.setMatchResult(normalizeGameOverPayload(payload));
     navigate(ROUTES.WINNER);
     return;
   }
@@ -676,7 +723,7 @@ function resolveRoute(route, state) {
   }
 
   if (normalizedRoute === ROUTES.WINNER) {
-    if (!state.winner) {
+    if (!state.matchResult) {
       const fallbackRoute = state.game
         ? ROUTES.GAME
         : state.joinedNickname
@@ -728,6 +775,57 @@ function normalizeLobby(payload) {
     countdownEndsAt: payload.countdownEndsAt || null,
     gameStarted: Boolean(payload.gameStarted)
   };
+}
+
+function normalizeGameOverPayload(payload) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  const winner = normalizeResultPlayer(source.winner || source.player || source);
+  const players = Array.isArray(source.players)
+    ? source.players.map(normalizeResultPlayer).filter(Boolean)
+    : winner
+      ? [winner]
+      : [];
+
+  return {
+    winner,
+    players,
+    reason: typeof source.reason === "string" ? source.reason : "last_player_standing",
+    endedAt: source.endedAt || Date.now()
+  };
+}
+
+function normalizeResultPlayer(player) {
+  if (!player || typeof player !== "object") return null;
+
+  const id = typeof player.id === "string" ? player.id : "";
+  const nickname = typeof player.nickname === "string"
+    ? player.nickname
+    : typeof player.name === "string"
+      ? player.name
+      : "";
+
+  if (!id && !nickname) return null;
+
+  return {
+    id,
+    nickname,
+    playerNumber: Number(player.playerNumber || 0),
+    lives: Number(player.lives || 0),
+    alive: player.alive === undefined ? undefined : Boolean(player.alive),
+    result: typeof player.result === "string" ? player.result : ""
+  };
+}
+
+function displayPlayerName(player) {
+  if (!player) return "";
+  return player.nickname || player.name || (player.playerNumber ? `Player ${player.playerNumber}` : "Unknown player");
+}
+
+function resultReasonLabel(reason) {
+  if (reason === "last_player_standing") return "Last player standing.";
+  if (reason === "all_opponents_eliminated") return "All opponents eliminated.";
+  if (reason === "disconnect") return "Match ended after a disconnect.";
+  return "Match ended.";
 }
 
 function timerLabel(lobby, now) {

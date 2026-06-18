@@ -186,6 +186,86 @@ h2 {
   padding: clamp(22px, 5vw, 42px);
 }
 
+.result-panel {
+  align-items: stretch;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.65fr);
+  padding: clamp(22px, 5vw, 42px);
+}
+
+.result-card {
+  align-content: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-height: 170px;
+  padding: 22px;
+}
+
+.result-card strong {
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.result-card small {
+  color: var(--muted);
+}
+
+.result-badge {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 900;
+  justify-self: start;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+
+.result-win {
+  background: rgba(123, 216, 143, 0.12);
+  border-color: rgba(123, 216, 143, 0.45);
+}
+
+.result-lose {
+  background: rgba(255, 107, 93, 0.12);
+  border-color: rgba(255, 107, 93, 0.45);
+}
+
+.result-neutral {
+  background: rgba(105, 167, 255, 0.12);
+  border-color: rgba(105, 167, 255, 0.42);
+}
+
+.result-list {
+  display: grid;
+  gap: 10px;
+  grid-column: 1 / -1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.result-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 38px 1fr auto;
+  min-height: 54px;
+  padding: 8px 10px;
+}
+
+.result-row small {
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
 .panel-copy p:last-child {
   color: var(--muted);
   line-height: 1.55;
@@ -389,6 +469,7 @@ h2 {
 
   .topbar,
   .nickname-panel,
+  .result-panel,
   .lobby-layout,
   .game-layout {
     grid-template-columns: 1fr;
