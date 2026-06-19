@@ -11,7 +11,7 @@ const SERVER_TO_MAIN = {
 let socket = null;
 
 
-// self (worker scoop) 
+// self (worker scoop)
 // self.onmessage listen to our main thread
 // self.postmessage write to our main thread
 
@@ -57,7 +57,7 @@ self.onmessage = (event) => {
         });
       };
 
-      // listen to socket messages and decide wich action can we do 
+      // listen to socket messages and decide wich action can we do
 
       socket.onmessage = (socketEvent) => {
 
@@ -85,7 +85,7 @@ self.onmessage = (event) => {
             type: "protocol:error",
             payload: { message: `Received unknown server message: ${serverMessage.type || "missing type"}.` }
           });
-          
+
           return;
         }
 
@@ -112,6 +112,7 @@ self.onmessage = (event) => {
 
         break;
       }
+
       socket.send(JSON.stringify({ type: "join", nickname: payload.nickname }));
 
       break;
@@ -149,9 +150,11 @@ self.onmessage = (event) => {
       break;
 
     default:
+
       self.postMessage({
         type: "protocol:error",
         payload: { message: `Received unknown worker command: ${message.type || "missing type"}.` }
       });
+
   }
 };

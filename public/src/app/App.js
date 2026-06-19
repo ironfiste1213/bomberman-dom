@@ -52,7 +52,7 @@ export function App() {
 
     workerRef.current = worker;
 
-      // on message : recieve from our worker 
+      // on message : recieve from our worker
 
       // post message : send to our worker
 
@@ -63,7 +63,7 @@ export function App() {
 
       const payload = message.payload || {};
 
-        // parse and decide 
+        // parse and decide
       switch (message.type) {
 
         case "connection:open":
@@ -75,6 +75,7 @@ export function App() {
         case "connection:close":
 
           setConnection((current) => ({ ...current, status: "offline" }));
+
           setError("Connection closed. Refresh when the server is ready.");
           break;
 
@@ -108,6 +109,7 @@ export function App() {
         case "server:lobby-state": {
 
           const nextLobby = normalizeLobby(payload);
+
           const currentPlayer = nextLobby.players.find((player) => player.id === connectionIdRef.current);
 
           setLobby(nextLobby);
@@ -137,6 +139,7 @@ export function App() {
         case "server:game-start":
 
           setGame(payload);
+
           navigate(ROUTES.GAME);
 
           engine.start({
@@ -161,7 +164,9 @@ export function App() {
         case "server:error":
 
           if (payload.code === "GAME_ALREADY_STARTED") {
+
             setJoinedNickname("");
+
             setBlocked({
               code: payload.code,
               message: payload.message || "Game already started. Wait for the next match."
@@ -172,9 +177,13 @@ export function App() {
           break;
 
         default:
+
           setError("Received unknown worker message.");
+
       }
+
     };
+
 
     worker.onerror = () => {
       setConnection((current) => ({ ...current, status: "error" }));
@@ -191,6 +200,7 @@ export function App() {
       worker.terminate();
       workerRef.current = null;
     };
+
   }, []);
 
   useEffect(() => {
@@ -199,6 +209,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
+
     const guardedRoute = resolveRoute(route, {
       joinedNickname,
       game,
@@ -208,6 +219,7 @@ export function App() {
     if (guardedRoute.redirectTo && guardedRoute.redirectTo !== route) {
       navigate(guardedRoute.redirectTo);
     }
+
   }, [route, joinedNickname, game, matchResult]);
 
   const joinLobby = (event) => {
@@ -233,8 +245,11 @@ export function App() {
   };
 
   const sendChat = (event) => {
+
     event.preventDefault();
+
     const cleanedText = chatText.trim().replace(/\s+/g, " ");
+    
     if (!cleanedText) return;
 
     if (!workerRef.current) {
@@ -266,6 +281,7 @@ export function App() {
     game,
     matchResult
   });
+
   const activeRoute = guardedRoute.route;
 
   return h(

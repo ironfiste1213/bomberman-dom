@@ -2,7 +2,9 @@ import { PLAYER_COLORS } from "../shared/constants.js";
 
 // Module-level game engine — lives entirely outside the component tree.
 // Started once when the server sends game:start.
+
 export const engine = {
+
   gameState: null,
   map: [],
   rafId: null,
