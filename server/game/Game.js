@@ -12,8 +12,8 @@ export default class Game {
         this.started = false;
     }
 
-    start(players) {
-        this.state = new GameState();
+    start(players, seed, density) {
+        this.state = new GameState(seed, density);
         this.started = true;
 
         for (const lobbyPlayer of players) {

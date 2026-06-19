@@ -1,7 +1,10 @@
+import { MAP_CONFIG } from "../../protocol.js";
+
 export default class GameMap {
-    constructor(seed = 1) {
+    constructor(seed = Math.random(), density = MAP_CONFIG.DEFAULT_DENSITY) {
         this.width = 15;
         this.height = 13;
+        this.density = density;
         this.seed = GameMap.hashSeed(seed);
         this.grid = this.generateGrid();
     }
@@ -10,10 +13,10 @@ export default class GameMap {
         const rows = [];
 
         for (let y = 0; y < this.height; y += 1) {
-            let row = "";
+            const row = [];
 
             for (let x = 0; x < this.width; x += 1) {
-                row += this.getTileSymbol(x, y);
+                row.push(this.getTileSymbol(x, y));
             }
 
             rows.push(row);
@@ -60,11 +63,11 @@ export default class GameMap {
     }
 
     shouldPlaceBlock(x, y) {
-        if (x % 2 !== 0 || y % 2 !== 1) {
+        if (this.isBorder(x, y) || this.isInnerPillar(x, y) || this.isSpawnZone(x, y)) {
             return false;
         }
 
-        return GameMap.cellNoise(this.seed, x, y) < 0.7;
+        return GameMap.cellNoise(this.seed, x, y) < this.density;
     }
 
     getTile(x, y) {

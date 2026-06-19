@@ -65,3 +65,8 @@ export const SPAWNS = [
   { x: 1, y: 11 },
   { x: 13, y: 11 }
 ];
+
+export const MAP_CONFIG = {
+  DEFAULT_DENSITY: 0.35
+};
+
