@@ -1,6 +1,10 @@
 import GameState from "./GameState.js";
 import PlayerSystem from "./systems/PlayerSystem.js";
+import BombSystem from "./systems/BombSystem.js";
+import ExplosionSystem from "./systems/ExplosionSystem.js";
 import Player from "./entities/players.js";
+
+
 
 export default class Game {
     constructor() {
@@ -27,12 +31,14 @@ export default class Game {
     setPlayerInput(playerId, input) {
         const player = this.state.players.get(playerId);
         if (!player || !input) return;
+        if (!player.alive) return 
 
         player.input = {
             up: Boolean(input.up),
             down: Boolean(input.down),
             left: Boolean(input.left),
-            right: Boolean(input.right)
+            right: Boolean(input.right),
+            bomb: Boolean(input.bomb)
         };
     }
 
@@ -40,10 +46,14 @@ export default class Game {
         this.state.players.delete(playerId);
     }
 
-    tick() {
+    tick(recentDeaths = []) {
         if (!this.started) return;
-        PlayerSystem.update(this.state)
+        PlayerSystem.update(this.state);
+        BombSystem.update(this.state);
+        ExplosionSystem.update(this.state, recentDeaths);
     }
+
+
 
     snapshot() {
         return {
