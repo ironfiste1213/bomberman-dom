@@ -1,18 +1,18 @@
-import { CLIENT_TYPES, PLAYER_COLORS } from "../shared/constants.js";
+import { PLAYER_COLORS } from "../shared/constants.js";
 
 // Module-level game engine — lives entirely outside the component tree.
 // Started once when the server sends game:start.
 export const engine = {
-  socket: null,
   gameState: null,
   map: [],
   rafId: null,
   playerElems: {},
   inputBound: false,
+  sendInput: null,
 
-  start(socket, map) {
-    this.socket = socket;
+  start({ map, sendInput }) {
     this.map = map || [];
+    this.sendInput = typeof sendInput === "function" ? sendInput : null;
     this.playerElems = {};
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
@@ -30,6 +30,7 @@ export const engine = {
     this.gameState = null;
     this.map = [];
     this.playerElems = {};
+    this.sendInput = null;
   },
 
   _startInput() {
@@ -45,9 +46,8 @@ export const engine = {
     };
 
     const push = () => {
-      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
-      console.log("CLIENT sending input:", keys);
-      this.socket.send(JSON.stringify({ type: CLIENT_TYPES.INPUT, input: { ...keys } }));
+      if (!this.sendInput) return;
+      this.sendInput({ ...keys });
     };
 
     window.addEventListener("keydown", (e) => {
@@ -58,7 +58,7 @@ export const engine = {
       keys[dir] = true;
       push();
     });
-    
+
     window.addEventListener("keyup", (e) => {
       const dir = KEY_MAP[e.key];
       if (!dir) return;

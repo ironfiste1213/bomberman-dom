@@ -1,11 +1,10 @@
 import { createElement as h } from "../../mini-framework/create-element.js";
 import { useEffect, useRef, useState } from "../../mini-framework/hooks.js";
 import { initRouter, navigate } from "../../mini-framework/router.js";
-import { CLIENT_TYPES, ROUTES } from "../shared/constants.js";
+import { ROUTES } from "../shared/constants.js";
 import { engine } from "../game/engine.js";
 import { resolveRoute } from "./routes.js";
-import { createSocket, handleServerMessage, send } from "./socket.js";
-import { emptyLobby } from "./state.js";
+import { emptyLobby, normalizeGameOverPayload, normalizeLobby } from "./state.js";
 import { BlockedScreen } from "../ui/screens/BlockedScreen.js";
 import { GameScreen } from "../ui/screens/GameScreen.js";
 import { Header } from "../ui/components/Header.js";
@@ -14,8 +13,14 @@ import { NicknameScreen } from "../ui/screens/NicknameScreen.js";
 import { NotFoundScreen } from "../ui/screens/NotFoundScreen.js";
 import { ResultScreen } from "../ui/screens/ResultScreen.js";
 
+function createWebSocketUrl() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/ws`;
+}
+
 export function App() {
-  const socketRef = useRef(null);
+
+  const workerRef = useRef(null);
   const connectionIdRef = useRef(null);
   const [route, setRoute] = useState(ROUTES.NICKNAME);
   const [connection, setConnection] = useState({
@@ -23,6 +28,7 @@ export function App() {
     id: null,
     maxPlayers: 4
   });
+
   const [nickname, setNickname] = useState("");
   const [joinedNickname, setJoinedNickname] = useState("");
   const [lobby, setLobby] = useState(emptyLobby());
@@ -38,43 +44,153 @@ export function App() {
     initRouter(setRoute, { mode: "hash" });
   }, []);
 
+  // connect with our didecated worker
+
   useEffect(() => {
-    const socket = createSocket();
-    socketRef.current = socket;
-    engine.socket = socket;
 
-    socket.addEventListener("open", () => {
-      setConnection((current) => ({ ...current, status: "online" }));
-    });
+    const worker = new Worker(new URL("../workers/client-worker.js", import.meta.url));
 
-    socket.addEventListener("close", () => {
-      setConnection((current) => ({ ...current, status: "offline" }));
-      setError("Connection closed. Refresh when the server is ready.");
-    });
+    workerRef.current = worker;
 
-    socket.addEventListener("error", () => {
+      // on message : recieve from our worker 
+
+      // post message : send to our worker
+
+    worker.onmessage = (event) => {
+
+      const message = event.data || {};
+
+
+      const payload = message.payload || {};
+
+        // parse and decide 
+      switch (message.type) {
+
+        case "connection:open":
+
+          setConnection((current) => ({ ...current, status: "online" }));
+          setError("");
+          break;
+
+        case "connection:close":
+
+          setConnection((current) => ({ ...current, status: "offline" }));
+          setError("Connection closed. Refresh when the server is ready.");
+          break;
+
+        case "connection:error":
+
+          setConnection((current) => ({ ...current, status: "error" }));
+
+          setError(payload.message || "WebSocket connection failed.");
+
+          break;
+
+        case "protocol:error":
+
+          setError(payload.message || "Received invalid server message.");
+          break;
+
+        case "server:welcome":
+
+          connectionIdRef.current = payload.id || null;
+
+          setConnection((current) => ({
+
+            ...current,
+            id: payload.id,
+            maxPlayers: payload.maxPlayers || current.maxPlayers
+
+          }));
+
+          break;
+
+        case "server:lobby-state": {
+
+          const nextLobby = normalizeLobby(payload);
+          const currentPlayer = nextLobby.players.find((player) => player.id === connectionIdRef.current);
+
+          setLobby(nextLobby);
+
+          if (currentPlayer && !nextLobby.gameStarted) {
+            setJoinedNickname(currentPlayer.nickname || "");
+            setBlocked(null);
+            setError("");
+            navigate(ROUTES.LOBBY);
+          }
+
+          break;
+
+        }
+
+        case "server:chat-message":
+
+          setMessages((current) => [...current, payload].slice(-80));
+
+          break;
+
+        case "server:game-tick":
+
+          engine.gameState = payload;
+          break;
+
+        case "server:game-start":
+
+          setGame(payload);
+          navigate(ROUTES.GAME);
+
+          engine.start({
+
+            map: payload.map,
+            sendInput: (input) => {
+              worker.postMessage({ type: "player:input", payload: { input } });
+            }
+
+          });
+
+          break;
+
+        case "server:game-over":
+
+          engine.stop();
+          setGame(null);
+          setMatchResult(normalizeGameOverPayload(payload));
+          navigate(ROUTES.WINNER);
+          break;
+
+        case "server:error":
+
+          if (payload.code === "GAME_ALREADY_STARTED") {
+            setJoinedNickname("");
+            setBlocked({
+              code: payload.code,
+              message: payload.message || "Game already started. Wait for the next match."
+            });
+          }
+
+          setError(payload.message || "Server refused the action.");
+          break;
+
+        default:
+          setError("Received unknown worker message.");
+      }
+    };
+
+    worker.onerror = () => {
       setConnection((current) => ({ ...current, status: "error" }));
-      setError("WebSocket connection failed.");
+      setError("Worker transport failed.");
+    };
+
+    worker.postMessage({
+      type: "connect",
+      payload: { wsUrl: createWebSocketUrl() }
     });
 
-    socket.addEventListener("message", (event) => {
-      handleServerMessage(event.data, {
-        getConnectionId: () => connectionIdRef.current,
-        setConnectionId: (id) => {
-          connectionIdRef.current = id;
-        },
-        setConnection,
-        setLobby,
-        setMessages,
-        setError,
-        setBlocked,
-        setJoinedNickname,
-        setGame,
-        setMatchResult
-      });
-    });
-
-    return () => socket.close();
+    return () => {
+      worker.postMessage({ type: "disconnect", payload: {} });
+      worker.terminate();
+      workerRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -104,14 +220,15 @@ export function App() {
       return;
     }
 
-    if (!send(socketRef.current, {
-      type: CLIENT_TYPES.JOIN,
-      nickname: cleanedNickname
-    })) {
+    if (!workerRef.current) {
       setError("Server is not connected yet.");
       return;
     }
 
+    workerRef.current.postMessage({
+      type: "join",
+      payload: { nickname: cleanedNickname }
+    });
     setError("");
   };
 
@@ -120,15 +237,18 @@ export function App() {
     const cleanedText = chatText.trim().replace(/\s+/g, " ");
     if (!cleanedText) return;
 
-    if (send(socketRef.current, {
-      type: CLIENT_TYPES.CHAT_MESSAGE,
-      text: cleanedText
-    })) {
-      setChatText("");
-      setError("");
-    } else {
+    if (!workerRef.current) {
       setError("Cannot send chat while disconnected.");
+      return;
     }
+
+    workerRef.current.postMessage({
+      type: "chat:send",
+      payload: { text: cleanedText }
+    });
+
+    setChatText("");
+    setError("");
   };
 
   const returnToNickname = () => {
