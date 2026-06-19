@@ -1,17 +1,21 @@
-import { createElement as h } from "../../mini-framework/create-element.js";
-import { useEffect, useRef, useState } from "../../mini-framework/hooks.js";
-import { initRouter, navigate } from "../../mini-framework/router.js";
-import { ROUTES } from "../shared/constants.js";
-import { engine } from "../game/engine.js";
-import { resolveRoute } from "./routes.js";
-import { emptyLobby, normalizeGameOverPayload, normalizeLobby } from "./state.js";
-import { BlockedScreen } from "../ui/screens/BlockedScreen.js";
-import { GameScreen } from "../ui/screens/GameScreen.js";
-import { Header } from "../ui/components/Header.js";
-import { LobbyScreen } from "../ui/screens/LobbyScreen.js";
-import { NicknameScreen } from "../ui/screens/NicknameScreen.js";
-import { NotFoundScreen } from "../ui/screens/NotFoundScreen.js";
-import { ResultScreen } from "../ui/screens/ResultScreen.js";
+import {
+  h,
+
+  useEffect,useRef,useState,
+
+  initRouter,navigate,ROUTES,
+    
+  engine, resolveRoute,emptyLobby,
+  
+  normalizeGameOverPayload,normalizeLobby,
+  
+  Header,BlockedScreen,GameScreen,
+  
+  LobbyScreen,NicknameScreen,NotFoundScreen,
+  
+  ResultScreen
+ 
+} from "./dependencies.js";
 
 function createWebSocketUrl() {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -249,7 +253,7 @@ export function App() {
     event.preventDefault();
 
     const cleanedText = chatText.trim().replace(/\s+/g, " ");
-    
+
     if (!cleanedText) return;
 
     if (!workerRef.current) {

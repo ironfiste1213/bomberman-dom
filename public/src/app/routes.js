@@ -43,7 +43,7 @@ export function resolveRoute(route, state = {}) {
       return allowRoute(NOT_FOUND_ROUTE);
 
   }
-  
+
 }
 
 export function normalizeRoute(route) {
