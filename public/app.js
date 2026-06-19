@@ -9,7 +9,7 @@ const MESSAGE_TYPES = {
   CHAT_MESSAGE: "chat:message",
   GAME_START: "game:start",
   GAME_OVER: "game:over",
-  GAME_STATE: "game:state",
+  GAME_TICK: "game:tick",
   ERROR: "error"
 };
 
@@ -98,11 +98,34 @@ const engine = {
 
   _startRAF() {
     const loop = () => {
-      const MAP_COLS = this.map[0]?.length || 11;
-      const MAP_ROWS = this.map.length || 7;
       const state = this.gameState;
+      if (state && state.map && state.map.grid) {
+        this.map = state.map.grid;
+      }
+      const MAP_COLS = this.map[0]?.length || 15;
+      const MAP_ROWS = this.map.length || 13;
       const arena = document.getElementById("arena");
       if (state && arena) {
+        // Update tiles dynamically based on block state
+        if (state.map && state.map.grid) {
+          for (let r = 0; r < state.map.grid.length; r++) {
+            const row = state.map.grid[r];
+            for (let c = 0; c < row.length; c++) {
+              const cell = row[c];
+              const tileEl = document.getElementById(`tile-${r}-${c}`);
+              if (tileEl) {
+                if (cell === ".") {
+                  tileEl.className = "tile tile-floor";
+                } else if (cell === "W") {
+                  tileEl.className = "tile tile-wall";
+                } else if (cell === "B") {
+                  tileEl.className = "tile tile-block";
+                }
+              }
+            }
+          }
+        }
+
         for (const p of state.players) {
           let el = this.playerElems[p.id];
           if (!el) {
@@ -476,8 +499,10 @@ function GameScreen({ game, messages, chatText, setChatText, sendChat }) {
       for (let c = 0; c < map[r].length; c++) {
         const cell = map[r][c];
         let className = "tile-floor";
-        if (cell === "#") className = "tile-wall";
+        if (cell === "W") className = "tile-wall";
+        else if (cell === "B") className = "tile-block";
         tiles.push(h("div", {
+          id: `tile-${r}-${c}`,
           className: `tile ${className}`,
           style: `grid-column: ${c + 1}; grid-row: ${r + 1};`
         }));
@@ -503,7 +528,7 @@ function GameScreen({ game, messages, chatText, setChatText, sendChat }) {
         {
           id: "arena",
           className: "arena-preview",
-          style: `display: grid; grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, 1fr); gap: 0;`
+          style: `position: relative; display: grid; grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, 1fr); gap: 0;`
         },
         ...tiles
       ),
@@ -649,8 +674,7 @@ function handleServerMessage(rawMessage, actions) {
     return;
   }
 
-  if (message.type === MESSAGE_TYPES.GAME_STATE) {
-    console.log("CLIENT received game state:", payload);
+  if (message.type === MESSAGE_TYPES.GAME_TICK) {
     engine.gameState = payload;
     return;
   }

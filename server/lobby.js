@@ -247,10 +247,11 @@ function startGame() {
     spawn: SPAWNS[index]
   }));
 
-  gameHandlers.onGameStart(gamePlayers);
+  const mapGrid = gameHandlers.onGameStart(gamePlayers);
   gameStartPayload = {
     startedAt: Date.now(),
-    players: gamePlayers
+    players: gamePlayers,
+    map: mapGrid
   };
 
   // The client will use this message to leave the waiting room and render the game.

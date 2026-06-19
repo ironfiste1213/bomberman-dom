@@ -20,6 +20,8 @@ export default class Game {
             player.spawn = lobbyPlayer.spawn;
             this.state.players.set(player.id, player);
         }
+
+        return this.state.map.grid;
     }
 
     setPlayerInput(playerId, input) {
