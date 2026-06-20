@@ -7,7 +7,7 @@ export default class BombSystem {
             if (!player.alive || player.input.bomb !== true) continue;
 
             try {
-                if (player.activeBombs >= player.bombLimit) return;
+                if (player.activeBombs >= player.bombLimit) continue;
 
                 const tileX = Math.floor(player.x);
                 const tileY = Math.floor(player.y);

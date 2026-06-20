@@ -136,8 +136,21 @@ export function App() {
           break;
 
         case "server:game-tick":
-
           engine.gameState = payload;
+          setGame((currentGame) => {
+            if (!currentGame) {
+              return {
+                ...payload,
+                map: payload.map?.grid || payload.map
+              };
+            }
+            return {
+              ...currentGame,
+              players: payload.players,
+              bombs: payload.bombs,
+              explosions: payload.explosions
+            };
+          });
           break;
 
         case "server:game-start":

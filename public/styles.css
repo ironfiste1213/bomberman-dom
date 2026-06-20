@@ -468,6 +468,67 @@ h2 {
   z-index: 10;
 }
 
+.bomb-sprite {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #3a3c3b, #151817, #070a09);
+  border: 2px solid #ff6b5d;
+  box-shadow: 0 0 10px rgba(255, 107, 93, 0.5);
+  animation: bomb-pulse 0.8s infinite alternate ease-in-out;
+  z-index: 8;
+}
+
+.bomb-sprite::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 6px;
+  height: 6px;
+  background: #ffdd73;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #ffdd73, 0 0 16px #ff6b5d;
+}
+
+@keyframes bomb-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.9);
+    box-shadow: 0 0 8px rgba(255, 107, 93, 0.6);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.1);
+    box-shadow: 0 0 20px #ff6b5d, 0 0 30px #ffdd73;
+  }
+}
+
+.explosion-sprite {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 4px;
+  background: radial-gradient(circle, #ffdd73 10%, #ff6b5d 65%, transparent 100%);
+  animation: explosion-fade 0.3s forwards cubic-bezier(0.1, 0.8, 0.3, 1);
+  z-index: 9;
+  pointer-events: none;
+}
+
+@keyframes explosion-fade {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 1;
+    filter: brightness(1.6);
+  }
+  30% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.0);
+    opacity: 0;
+  }
+}
+
+
 @media (max-width: 820px) {
   .shell {
     padding: 18px;

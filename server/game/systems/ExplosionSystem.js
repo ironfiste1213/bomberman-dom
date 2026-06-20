@@ -60,8 +60,10 @@ export default class ExplosionSystem {
                 }
 
                 for (const player of state.players.values()) {
-                    // Check alive + per-tick dedupe.
-                    ExplosionSystem.damagePlayer(state, player, hitSet, recentDeaths);
+                    if (Math.floor(player.x) === x && Math.floor(player.y) === y) {
+                        // Check alive + per-tick dedupe.
+                        ExplosionSystem.damagePlayer(state, player, hitSet, recentDeaths);
+                    }
                 }
             }
 

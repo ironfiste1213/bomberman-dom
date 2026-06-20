@@ -9,6 +9,8 @@ export const engine = {
   map: [],
   rafId: null,
   playerElems: {},
+  bombElems: {},
+  explosionElems: {},
   inputBound: false,
   sendInput: null,
 
@@ -16,6 +18,8 @@ export const engine = {
     this.map = map || [];
     this.sendInput = typeof sendInput === "function" ? sendInput : null;
     this.playerElems = {};
+    this.bombElems = {};
+    this.explosionElems = {};
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
@@ -31,7 +35,18 @@ export const engine = {
     }
     this.gameState = null;
     this.map = [];
+    for (const el of Object.values(this.playerElems)) {
+      el.remove();
+    }
+    for (const el of Object.values(this.bombElems)) {
+      el.remove();
+    }
+    for (const el of Object.values(this.explosionElems)) {
+      el.remove();
+    }
     this.playerElems = {};
+    this.bombElems = {};
+    this.explosionElems = {};
     this.sendInput = null;
   },
 
@@ -39,17 +54,22 @@ export const engine = {
     if (this.inputBound) return;
     this.inputBound = true;
 
-    const keys = { up: false, down: false, left: false, right: false };
+    const keys = { up: false, down: false, left: false, right: false, bomb: false };
     const KEY_MAP = {
       ArrowUp: "up", w: "up",
       ArrowDown: "down", s: "down",
       ArrowLeft: "left", a: "left",
-      ArrowRight: "right", d: "right"
+      ArrowRight: "right", d: "right",
+      " ": "bomb",
+      Spacebar: "bomb"
     };
 
     const push = () => {
       if (!this.sendInput) return;
       this.sendInput({ ...keys });
+      if (keys.bomb) {
+        keys.bomb = false;
+      }
     };
 
     window.addEventListener("keydown", (e) => {
@@ -99,7 +119,17 @@ export const engine = {
           }
         }
 
-        for (const p of state.players) {
+        // Clean up left players
+        const activePlayerIds = new Set((state.players || []).map(p => p.id));
+        for (const id of Object.keys(this.playerElems)) {
+          if (!activePlayerIds.has(id)) {
+            this.playerElems[id].remove();
+            delete this.playerElems[id];
+          }
+        }
+
+        // Render/update players
+        for (const p of state.players || []) {
           let el = this.playerElems[p.id];
           if (!el) {
             el = document.createElement("div");
@@ -111,6 +141,57 @@ export const engine = {
           }
           el.style.left = `${(p.x / MAP_COLS) * 100}%`;
           el.style.top = `${(p.y / MAP_ROWS) * 100}%`;
+          el.style.display = p.alive ? "inline-flex" : "none";
+        }
+
+        // Render/update bombs
+        const activeBombIds = new Set();
+        for (const b of state.bombs || []) {
+          activeBombIds.add(b.id);
+          let el = this.bombElems[b.id];
+          if (!el) {
+            el = document.createElement("div");
+            el.className = "bomb-sprite";
+            arena.appendChild(el);
+            this.bombElems[b.id] = el;
+          }
+          el.style.left = `${((b.x + 0.5) / MAP_COLS) * 100}%`;
+          el.style.top = `${((b.y + 0.5) / MAP_ROWS) * 100}%`;
+          el.style.width = `calc(${(1 / MAP_COLS) * 100}% - 4px)`;
+          el.style.height = `calc(${(1 / MAP_ROWS) * 100}% - 4px)`;
+        }
+
+        // Clean up removed/exploded bombs
+        for (const id of Object.keys(this.bombElems)) {
+          if (!activeBombIds.has(id)) {
+            this.bombElems[id].remove();
+            delete this.bombElems[id];
+          }
+        }
+
+        // Render/update explosions
+        const activeExplosionIds = new Set();
+        for (const e of state.explosions || []) {
+          activeExplosionIds.add(e.id);
+          let el = this.explosionElems[e.id];
+          if (!el) {
+            el = document.createElement("div");
+            el.className = "explosion-sprite";
+            arena.appendChild(el);
+            this.explosionElems[e.id] = el;
+          }
+          el.style.left = `${((e.x + 0.5) / MAP_COLS) * 100}%`;
+          el.style.top = `${((e.y + 0.5) / MAP_ROWS) * 100}%`;
+          el.style.width = `${(1 / MAP_COLS) * 100}%`;
+          el.style.height = `${(1 / MAP_ROWS) * 100}%`;
+        }
+
+        // Clean up expired explosions
+        for (const id of Object.keys(this.explosionElems)) {
+          if (!activeExplosionIds.has(id)) {
+            this.explosionElems[id].remove();
+            delete this.explosionElems[id];
+          }
         }
       }
       this.rafId = requestAnimationFrame(loop);
