@@ -154,8 +154,9 @@ function joinLobby(client, nickname) {
   }
 
   // Prevent two players from using the same name.
+  const nicknameKey = normalizeNicknameKey(cleanedNickname);
   const nicknameAlreadyTaken = [...players.values()].some(
-    (p) => p.nickname === cleanedNickname
+    (player) => normalizeNicknameKey(player.nickname) === nicknameKey
   );
   if (nicknameAlreadyTaken) {
     sendError(client, "NICKNAME_TAKEN", `Nickname "${cleanedNickname}" is already taken.`);
@@ -410,6 +411,12 @@ function sanitizeNickname(nickname) {
   // Keep names short enough for UI labels.
   if (cleaned.length < 2 || cleaned.length > 16) return "";
   return cleaned;
+}
+
+// Normalizes nicknames for uniqueness checks while preserving the original
+// cleaned nickname for display.
+function normalizeNicknameKey(nickname) {
+  return sanitizeNickname(nickname).toLowerCase();
 }
 
 // Cleans chat text before broadcasting it.
