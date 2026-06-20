@@ -24,16 +24,20 @@ export function normalizeLobby(payload) {
 
 export function normalizeGameOverPayload(payload) {
   const source = payload && typeof payload === "object" ? payload : {};
-  const winner = normalizeResultPlayer(source.winner || source.player || source);
   const players = Array.isArray(source.players)
     ? source.players.map(normalizeResultPlayer).filter(Boolean)
+    : [];
+  const inferredWinner = players.find((player) => player.result === "winner") || null;
+  const winner = normalizeResultPlayer(source.winner || source.player || inferredWinner || source);
+  const normalizedPlayers = players.length
+    ? players
     : winner
       ? [winner]
       : [];
 
   return {
     winner,
-    players,
+    players: normalizedPlayers,
     reason: typeof source.reason === "string" ? source.reason : "last_player_standing",
     endedAt: source.endedAt || Date.now()
   };

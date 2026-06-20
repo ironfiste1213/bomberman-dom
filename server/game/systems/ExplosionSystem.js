@@ -9,6 +9,7 @@ export default class ExplosionSystem {
         const tickMs = 16.67;
         const hitSet = new Set();
 
+        // --- Phase 1: Process newly exploded bombs ---
         for (const bomb of state.bombs) {
             if (bomb.exploded !== true) continue;
             if (bomb.processed === true) continue;
@@ -54,10 +55,12 @@ export default class ExplosionSystem {
                     }
                 }
 
-                state.explosions.push(
-                    new Explosion(crypto.randomUUID(), x, y)
-                );
+                // Create a new explosion tile with a set to track which players it already hit
+                const explosion = new Explosion(crypto.randomUUID(), x, y);
+                explosion.hitPlayerIds = new Set();
+                state.explosions.push(explosion);
 
+                // Chain reaction: trigger other bombs caught in the explosion
                 for (const otherBomb of state.bombs) {
                     if (
                         otherBomb.exploded === false &&
@@ -68,10 +71,11 @@ export default class ExplosionSystem {
                     }
                 }
 
+                // Damage players on the explosion tile (initial hit)
                 for (const player of state.players.values()) {
                     if (Math.floor(player.x) === x && Math.floor(player.y) === y) {
-                        // Check alive + per-tick dedupe.
                         ExplosionSystem.damagePlayer(state, player, hitSet, recentDeaths);
+                        if (explosion.hitPlayerIds) explosion.hitPlayerIds.add(player.id);
                     }
                 }
             }
@@ -87,11 +91,28 @@ export default class ExplosionSystem {
         // Remove bombs already processed (separate pass).
         state.bombs = state.bombs.filter((b) => b.processed !== true);
 
+        // --- Phase 2: Continuous damage — players walking into active explosion tiles ---
+        for (const explosion of state.explosions) {
+            if (!explosion.hitPlayerIds) explosion.hitPlayerIds = new Set();
+
+            for (const player of state.players.values()) {
+                if (!player.alive) continue;
+                if (explosion.hitPlayerIds.has(player.id)) continue;
+
+                if (
+                    Math.floor(player.x) === explosion.x &&
+                    Math.floor(player.y) === explosion.y
+                ) {
+                    ExplosionSystem.damagePlayer(state, player, hitSet, recentDeaths);
+                    explosion.hitPlayerIds.add(player.id);
+                }
+            }
+        }
+
         // Tick explosions and remove expired ones.
         for (const explosion of state.explosions) {
             explosion.duration -= tickMs;
         }
-
         state.explosions = state.explosions.filter((e) => e.duration > 0);
     }
 
@@ -108,4 +129,3 @@ export default class ExplosionSystem {
         }
     }
 }
-

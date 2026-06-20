@@ -26,6 +26,7 @@ export function App() {
 
   const workerRef = useRef(null);
   const connectionIdRef = useRef(null);
+  const resultTimerRef = useRef(null);
   const [route, setRoute] = useState(ROUTES.NICKNAME);
   const [connection, setConnection] = useState({
     status: "connecting",
@@ -47,6 +48,13 @@ export function App() {
   useEffect(() => {
     initRouter(setRoute, { mode: "hash" });
   }, []);
+
+  const clearResultTimer = () => {
+    if (resultTimerRef.current) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+  };
 
   // connect with our didecated worker
 
@@ -120,6 +128,7 @@ export function App() {
 
           if (currentPlayer && !nextLobby.gameStarted) {
             setJoinedNickname(currentPlayer.nickname || "");
+            setMatchResult(null);
             setBlocked(null);
             setError("");
             navigate(ROUTES.LOBBY);
@@ -156,7 +165,9 @@ export function App() {
 
         case "server:game-start":
 
+          clearResultTimer();
           setGame(payload);
+          setMatchResult(null);
 
           navigate(ROUTES.GAME);
 
@@ -173,10 +184,18 @@ export function App() {
 
         case "server:game-over":
 
+          clearResultTimer();
           engine.stop();
           setGame(null);
           setMatchResult(normalizeGameOverPayload(payload));
+          setJoinedNickname("");
+          setLobby(emptyLobby());
+          setBlocked(null);
+          setError("");
           navigate(ROUTES.WINNER);
+          resultTimerRef.current = window.setTimeout(() => {
+            returnToNickname();
+          }, 3000);
           break;
 
         case "server:error":
@@ -214,6 +233,7 @@ export function App() {
     });
 
     return () => {
+      clearResultTimer();
       worker.postMessage({ type: "disconnect", payload: {} });
       worker.terminate();
       workerRef.current = null;
@@ -243,6 +263,7 @@ export function App() {
   const joinLobby = (event) => {
     event.preventDefault();
     setBlocked(null);
+    setMatchResult(null);
     const cleanedNickname = nickname.trim().replace(/\s+/g, " ");
 
     if (cleanedNickname.length < 2 || cleanedNickname.length > 16) {
@@ -284,8 +305,14 @@ export function App() {
     setError("");
   };
 
-  const returnToNickname = () => {
-    setMatchResult(null);
+  const returnToNickname = (options = {}) => {
+    clearResultTimer();
+    const keepResult = Boolean(options.keepResult);
+
+    if (!keepResult) {
+      setMatchResult(null);
+    }
+
     setJoinedNickname("");
     setLobby(emptyLobby());
     setGame(null);
@@ -350,7 +377,7 @@ export function App() {
       ? ResultScreen({
         matchResult,
         currentPlayerId: connection.id,
-        navigateToNickname: returnToNickname
+        navigateToNickname: () => returnToNickname()
       })
       : null,
     !blocked && activeRoute === "not-found"

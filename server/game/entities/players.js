@@ -5,17 +5,18 @@ export default class Player {
 
         this.x = 0;
         this.y = 0;
-        this.speed = 0.1;
+        this.speed = 0.07;
         this.alive = true;
         this.lives = 3;
         this.bombLimit = 1;
         this.activeBombs = 0;
-        this.flameRange = 1;
+        this.flameRange = 1;   // Increases permanently with each Flame powerup
         this.input = {
             up: false,
             down: false,
             left: false,
             right: false,
+            bomb: false,
         };
     }
 }

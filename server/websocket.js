@@ -14,6 +14,14 @@ const OPCODES = {
   PONG: 0xa
 };
 
+const VALID_CLIENT_OPCODES = new Set([
+  OPCODES.CONTINUATION,
+  OPCODES.TEXT,
+  OPCODES.CLOSE,
+  OPCODES.PING,
+  OPCODES.PONG
+]);
+
 // Turns a normal HTTP upgrade request into a WebSocket connection.
 // This replaces using a package like "ws", keeping the server dependency-free.
 export function acceptWebSocket(request, socket, onConnection) {
@@ -70,25 +78,32 @@ function createConnection(socket) {
 
   // Every time raw bytes arrive, parse as many complete WebSocket frames as possible.
   socket.on("data", (chunk) => {
-    buffer = Buffer.concat([buffer, chunk]);
-    const parsed = parseFrames(buffer);
+    try {
+      buffer = Buffer.concat([buffer, chunk]);
+      const parsed = parseFrames(buffer);
 
-    // Keep leftover bytes for the next data event.
-    buffer = parsed.remaining;
+      // Keep leftover bytes for the next data event.
+      buffer = parsed.remaining;
 
-    for (const frame of parsed.frames) {
-      // Text frames are the JSON messages from the browser.
-      if (frame.opcode === OPCODES.TEXT) {
-        emit("message", frame.payload.toString("utf8"));
+      for (const frame of parsed.frames) {
+        // Text frames are the JSON messages from the browser.
+        if (frame.opcode === OPCODES.TEXT) {
+          emit("message", frame.payload.toString("utf8"));
 
-      // Browsers may ping the server. We answer pong to keep the connection healthy.
-      } else if (frame.opcode === OPCODES.PING) {
-        sendFrame(socket, OPCODES.PONG, frame.payload);
+        // Browsers may ping the server. We answer pong to keep the connection healthy.
+        } else if (frame.opcode === OPCODES.PING) {
+          sendFrame(socket, OPCODES.PONG, frame.payload);
 
-      // Close frames mean the browser wants to disconnect.
-      } else if (frame.opcode === OPCODES.CLOSE) {
-        close();
+        // Close frames mean the browser wants to disconnect.
+        } else if (frame.opcode === OPCODES.CLOSE) {
+          close();
+          break;
+        }
       }
+    } catch (error) {
+      // A malformed or oversized frame was received.
+      // Destroy the socket silently instead of crashing the process.
+      close();
     }
   });
 
@@ -139,12 +154,32 @@ function parseFrames(buffer) {
     const firstByte = buffer[offset];
     const secondByte = buffer[offset + 1];
 
+    // RFC 6455 requires client-to-server frames to be final, masked, and
+    // free of reserved extensions unless the server negotiated them.
+    const fin = (firstByte & 0x80) === 0x80;
+    const reservedBits = firstByte & 0x70;
+
     // Lower 4 bits of first byte are the opcode.
     const opcode = firstByte & 0x0f;
-    
+
+    if (reservedBits !== 0) {
+      throw new Error("WebSocket reserved bits are not supported");
+    }
+
+    if (!VALID_CLIENT_OPCODES.has(opcode)) {
+      throw new Error(`Unsupported WebSocket opcode: ${opcode}`);
+    }
+
+    if (!fin) {
+      throw new Error("Fragmented WebSocket frames are not supported");
+    }
+
     // Browser-to-server frames must be masked.
     // The mask is used below to decode the payload.
     const isMasked = (secondByte & 0x80) === 0x80;
+    if (!isMasked) {
+      throw new Error("Client WebSocket frames must be masked");
+    }
 
     // Lower 7 bits of second byte are either the length or a length marker.
     let payloadLength = secondByte & 0x7f;
@@ -167,8 +202,12 @@ function parseFrames(buffer) {
       headerLength = 10;
     }
 
+    if (opcode >= OPCODES.CLOSE && payloadLength > 125) {
+      throw new Error("WebSocket control frame payload too large");
+    }
+
     // Client frames include a 4 byte mask before the payload.
-    const maskLength = isMasked ? 4 : 0;
+    const maskLength = 4;
     const frameLength = headerLength + maskLength + payloadLength;
 
     // Full frame has not arrived yet. Stop and wait for more TCP data.

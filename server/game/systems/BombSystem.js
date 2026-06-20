@@ -21,14 +21,8 @@ export default class BombSystem {
 
                 if (!hasNonExplodedBombOnTile) {
                     const id = crypto.randomUUID();
-                    const bomb = new Bomb(
-                        id,
-                        player.id,
-                        tileX,
-                        tileY,
-                        player.flameRange
-                    );
-
+                    // Use the player's permanent flame range (upgraded by Flame powerups)
+                    const bomb = new Bomb(id, player.id, tileX, tileY, player.flameRange);
                     state.bombs.push(bomb);
                     player.activeBombs += 1;
                 }
@@ -50,4 +44,3 @@ export default class BombSystem {
         }
     }
 }
-

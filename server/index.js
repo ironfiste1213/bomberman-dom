@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { acceptWebSocket } from "./websocket.js";
-import { broadcastGameTick, registerConnection } from "./lobby.js";
+import { broadcastGameOver, broadcastGameTick, registerConnection } from "./lobby.js";
 import Game from "./game/Game.js";
 import GameLoop from "./game/GameLoop.js";
 
@@ -13,6 +13,8 @@ const PUBLIC_DIR = path.resolve(__dirname, "../public");
 const game = new Game();
 const loop = new GameLoop(game, (snapshot) => {
   broadcastGameTick(snapshot);
+}, (payload) => {
+  broadcastGameOver(payload);
 });
 
 loop.start();
@@ -89,7 +91,8 @@ server.on("upgrade", (request, socket) => {
     registerConnection(connection, {
       onGameStart: (players) => game.start(players),
       onPlayerInput: (playerId, input) => game.setPlayerInput(playerId, input),
-      onPlayerLeave: (playerId) => game.removePlayer(playerId)
+      onPlayerLeave: (playerId) => game.removePlayer(playerId),
+      onGameOver: (payload) => broadcastGameOver(payload)
     });
   });
 });

@@ -15,6 +15,15 @@ export const engine = {
   inputBound: false,
   sendInput: null,
 
+  // FPS tracking
+  _fps: 0,
+  _frameCount: 0,
+  _lastFpsTime: 0,
+
+  getFps() {
+    return this._fps;
+  },
+
   start({ map, sendInput }) {
     this.map = map || [];
     this.sendInput = typeof sendInput === "function" ? sendInput : null;
@@ -22,6 +31,9 @@ export const engine = {
     this.bombElems = {};
     this.explosionElems = {};
     this.powerupElems = {};
+    this._fps = 0;
+    this._frameCount = 0;
+    this._lastFpsTime = performance.now();
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
@@ -54,6 +66,7 @@ export const engine = {
     this.explosionElems = {};
     this.powerupElems = {};
     this.sendInput = null;
+    this._fps = 0;
   },
 
   _startInput() {
@@ -118,7 +131,18 @@ export const engine = {
   },
 
   _startRAF() {
-    const loop = () => {
+    const loop = (timestamp) => {
+      // ── FPS counter ────────────────────────────────────────────
+      this._frameCount++;
+      const elapsed = timestamp - this._lastFpsTime;
+      if (elapsed >= 1000) {
+        this._fps = Math.round((this._frameCount * 1000) / elapsed);
+        this._frameCount = 0;
+        this._lastFpsTime = timestamp;
+        // Dispatch custom event so App/Header can read FPS without polling
+        window.dispatchEvent(new CustomEvent("engine:fps", { detail: { fps: this._fps } }));
+      }
+
       const state = this.gameState;
       if (state && state.map && state.map.grid) {
         this.map = state.map.grid;
@@ -160,14 +184,16 @@ export const engine = {
           let el = this.playerElems[p.id];
           if (!el) {
             el = document.createElement("div");
-            el.className = `player-sprite token-${PLAYER_COLORS[(p.playerNumber - 1) % PLAYER_COLORS.length]}`;
-            el.title = p.nickname;
-            el.textContent = p.playerNumber;
+            const colorClass = `token-${PLAYER_COLORS[(p.playerNumber - 1) % PLAYER_COLORS.length]}`;
+            el.className = `player-sprite ${colorClass}${p.isBot ? " bot-sprite" : ""}`;
+            el.title = p.isBot ? `🤖 ${p.nickname}` : p.nickname;
+            el.textContent = p.isBot ? "🤖" : p.playerNumber;
             arena.appendChild(el);
             this.playerElems[p.id] = el;
           }
-          el.style.left = `${(p.x / MAP_COLS) * 100}%`;
-          el.style.top = `${(p.y / MAP_ROWS) * 100}%`;
+          // +0.5 offset centers the sprite on its grid tile (matches bomb/powerup positioning)
+          el.style.left = `${((p.x + 0.5) / MAP_COLS) * 100}%`;
+          el.style.top  = `${((p.y + 0.5) / MAP_ROWS) * 100}%`;
           el.style.display = p.alive ? "inline-flex" : "none";
         }
 
@@ -183,8 +209,8 @@ export const engine = {
             this.bombElems[b.id] = el;
           }
           el.style.left = `${((b.x + 0.5) / MAP_COLS) * 100}%`;
-          el.style.top = `${((b.y + 0.5) / MAP_ROWS) * 100}%`;
-          el.style.width = `calc(${(1 / MAP_COLS) * 100}% - 4px)`;
+          el.style.top  = `${((b.y + 0.5) / MAP_ROWS) * 100}%`;
+          el.style.width  = `calc(${(1 / MAP_COLS) * 100}% - 4px)`;
           el.style.height = `calc(${(1 / MAP_ROWS) * 100}% - 4px)`;
         }
 
@@ -207,9 +233,9 @@ export const engine = {
             arena.appendChild(el);
             this.explosionElems[e.id] = el;
           }
-          el.style.left = `${((e.x + 0.5) / MAP_COLS) * 100}%`;
-          el.style.top = `${((e.y + 0.5) / MAP_ROWS) * 100}%`;
-          el.style.width = `${(1 / MAP_COLS) * 100}%`;
+          el.style.left   = `${((e.x + 0.5) / MAP_COLS) * 100}%`;
+          el.style.top    = `${((e.y + 0.5) / MAP_ROWS) * 100}%`;
+          el.style.width  = `${(1 / MAP_COLS) * 100}%`;
           el.style.height = `${(1 / MAP_ROWS) * 100}%`;
         }
 
@@ -233,9 +259,9 @@ export const engine = {
             arena.appendChild(el);
             this.powerupElems[pu.id] = el;
           }
-          el.style.left = `${((pu.x + 0.5) / MAP_COLS) * 100}%`;
-          el.style.top = `${((pu.y + 0.5) / MAP_ROWS) * 100}%`;
-          el.style.width = `${(1 / MAP_COLS) * 100}%`;
+          el.style.left   = `${((pu.x + 0.5) / MAP_COLS) * 100}%`;
+          el.style.top    = `${((pu.y + 0.5) / MAP_ROWS) * 100}%`;
+          el.style.width  = `${(1 / MAP_COLS) * 100}%`;
           el.style.height = `${(1 / MAP_ROWS) * 100}%`;
         }
 

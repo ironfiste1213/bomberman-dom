@@ -28,7 +28,8 @@ let gameStartPayload = null;
 let gameHandlers = {
   onGameStart: () => {},
   onPlayerInput: () => {},
-  onPlayerLeave: () => {}
+  onPlayerLeave: () => {},
+  onGameOver: () => {}
 };
 
 // Called once for every browser WebSocket connection.
@@ -152,6 +153,15 @@ function joinLobby(client, nickname) {
     return;
   }
 
+  // Prevent two players from using the same name.
+  const nicknameAlreadyTaken = [...players.values()].some(
+    (p) => p.nickname === cleanedNickname
+  );
+  if (nicknameAlreadyTaken) {
+    sendError(client, "NICKNAME_TAKEN", `Nickname "${cleanedNickname}" is already taken.`);
+    return;
+  }
+
   // Store the player info on this connection.
   client.nickname = cleanedNickname;
   client.playerNumber = nextPlayerNumber++;
@@ -244,7 +254,8 @@ function startGame() {
     nickname: player.nickname,
     playerNumber: player.playerNumber,
     lives: 3,
-    spawn: SPAWNS[index]
+    spawn: SPAWNS[index],
+    isBot: Boolean(player.isBot)
   }));
 
   const mapGrid = gameHandlers.onGameStart(gamePlayers);
@@ -267,8 +278,11 @@ function removeClientConnection(client, connection) {
   players.delete(player.id);
 
   if (gameStarted) {
-    gameHandlers.onPlayerLeave(player.id);
     removePlayerFromGameStartPayload(player.id);
+    const gameOverPayload = gameHandlers.onPlayerLeave(player.id);
+    if (gameOverPayload) {
+      gameHandlers.onGameOver(gameOverPayload);
+    }
   } else {
     syncLobbyTimersAfterPlayerRemoval();
     broadcastLobbyState();
@@ -323,7 +337,8 @@ function lobbyStatePayload() {
     players: getPlayers().map((player) => ({
       id: player.id,
       nickname: player.nickname,
-      playerNumber: player.playerNumber
+      playerNumber: player.playerNumber,
+      isBot: Boolean(player.isBot)
     })),
     playerCount: players.size,
     minPlayers: LOBBY.MIN_PLAYERS,
@@ -352,6 +367,12 @@ export function broadcastGameTick(payload) {
   broadcast(SERVER_MESSAGES.GAME_TICK, payload);
 }
 
+export function broadcastGameOver(payload) {
+  if (!gameStarted) return;
+  broadcast(SERVER_MESSAGES.GAME_OVER, payload);
+  resetMatchState();
+}
+
 // Converts a JS object into JSON and sends it through the WebSocket.
 // All server messages follow this shape:
 // { type: "some:type", payload: { ...data } }
@@ -362,6 +383,20 @@ function send(client, type, payload) {
 
 function sendError(client, code, message) {
   send(client, SERVER_MESSAGES.ERROR, { code, message });
+}
+
+function resetMatchState() {
+  clearLobbyTimer(waitingTimer);
+  clearLobbyTimer(countdownTimer);
+
+  waitingTimer = null;
+  countdownTimer = null;
+  waitingEndsAt = null;
+  countdownEndsAt = null;
+  gameStarted = false;
+  gameStartPayload = null;
+  nextPlayerNumber = 1;
+  players.clear();
 }
 
 // Makes sure nickname is usable before entering the lobby.

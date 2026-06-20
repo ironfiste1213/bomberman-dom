@@ -14,12 +14,14 @@ export function resolveRoute(route, state = {}) {
 
     case ROUTES.NICKNAME:
 
+      if (state.matchResult) return redirectTo(ROUTES.WINNER);
       if (state.game) return redirectTo(ROUTES.GAME);
       if (state.joinedNickname) return redirectTo(ROUTES.LOBBY);
       return allowRoute(ROUTES.NICKNAME);
 
     case ROUTES.LOBBY:
 
+      if (state.matchResult) return redirectTo(ROUTES.WINNER);
       if (state.game) return redirectTo(ROUTES.GAME);
 
       if (!state.joinedNickname) return redirectTo(ROUTES.NICKNAME);
@@ -28,6 +30,7 @@ export function resolveRoute(route, state = {}) {
 
     case ROUTES.GAME:
 
+      if (state.matchResult) return redirectTo(ROUTES.WINNER);
       if (!state.game) return redirectTo(joinedFallbackRoute(state));
 
       return allowRoute(ROUTES.GAME);
