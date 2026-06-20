@@ -528,8 +528,178 @@ h2 {
   }
 }
 
+/* ── Power-up sprites ─────────────────────────────────────────────────── */
+
+.powerup-sprite {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 900;
+  color: #fff;
+  z-index: 7;
+  animation: powerup-float 1.2s ease-in-out infinite alternate;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+/* Bombs powerup — blue */
+.powerup-bombs {
+  background: radial-gradient(circle at 35% 35%, #4d8aff, #1a3fa0);
+  border: 2px solid #69a7ff;
+  box-shadow: 0 0 10px rgba(105, 167, 255, 0.7);
+}
+.powerup-bombs::after {
+  content: '+💣';
+}
+
+/* Flames powerup — orange/red */
+.powerup-flames {
+  background: radial-gradient(circle at 35% 35%, #ff8c3a, #b83700);
+  border: 2px solid #ff6b5d;
+  box-shadow: 0 0 10px rgba(255, 107, 93, 0.7);
+}
+.powerup-flames::after {
+  content: '+🔥';
+}
+
+/* Speed powerup — green */
+.powerup-speed {
+  background: radial-gradient(circle at 35% 35%, #5de87d, #1a6e33);
+  border: 2px solid #7bd88f;
+  box-shadow: 0 0 10px rgba(123, 216, 143, 0.7);
+}
+.powerup-speed::after {
+  content: '+⚡';
+}
+
+@keyframes powerup-float {
+  0%   { transform: translate(-50%, -55%) scale(0.92); }
+  100% { transform: translate(-50%, -45%) scale(1.08); }
+}
+
+
+/* ── Power-up tracker bar ────────────────────────────────────────────── */
+.powerup-tracker-bar {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.powerup-tracker-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.powerup-tracker-stats {
+  display: flex;
+  gap: 16px;
+  flex-grow: 1;
+  justify-content: flex-end;
+}
+
+.powerup-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(16, 23, 21, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 12px;
+  min-width: 120px;
+  transition: all 0.2s ease;
+}
+
+.powerup-stat-card:hover {
+  background: rgba(16, 23, 21, 0.9);
+  transform: translateY(-1px);
+}
+
+.powerup-stat-icon {
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.powerup-stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.powerup-stat-label {
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.powerup-stat-value {
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: var(--text);
+}
+
+/* Specific glows for cards */
+.powerup-stat-bombs {
+  border-color: rgba(105, 167, 255, 0.35);
+  box-shadow: inset 0 0 6px rgba(105, 167, 255, 0.1);
+}
+.powerup-stat-bombs .powerup-stat-value {
+  color: #69a7ff;
+}
+
+.powerup-stat-flames {
+  border-color: rgba(255, 107, 93, 0.35);
+  box-shadow: inset 0 0 6px rgba(255, 107, 93, 0.1);
+}
+.powerup-stat-flames .powerup-stat-value {
+  color: #ff6b5d;
+}
+
+.powerup-stat-speed {
+  border-color: rgba(123, 216, 143, 0.35);
+  box-shadow: inset 0 0 6px rgba(123, 216, 143, 0.1);
+}
+.powerup-stat-speed .powerup-stat-value {
+  color: #7bd88f;
+}
+
 
 @media (max-width: 820px) {
+  .powerup-tracker-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .powerup-tracker-title {
+    text-align: center;
+  }
+  .powerup-tracker-stats {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .powerup-stat-card {
+    flex: 1;
+    min-width: 90px;
+    padding: 4px 8px;
+  }
+
   .shell {
     padding: 18px;
   }

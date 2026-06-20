@@ -2,9 +2,43 @@ import { createElement as h } from "../../../mini-framework/create-element.js";
 import { PLAYER_COLORS } from "../../shared/constants.js";
 import { ChatPanel } from "../components/ChatPanel.js";
 
-export function GameScreen({ game, messages, chatText, setChatText, sendChat }) {
+export function GameScreen({ game, messages, chatText, setChatText, sendChat, currentPlayerId }) {
   const players = game && Array.isArray(game.players) ? game.players : [];
   const map = game && Array.isArray(game.map) ? game.map : [];
+
+  const me = currentPlayerId ? players.find((p) => p.id === currentPlayerId) : null;
+  const speedTier = me ? Math.round(((me.speed || 0.1) - 0.1) / 0.03) + 1 : 1;
+  const bombLimit = me ? (me.bombLimit || 1) : 1;
+  const flameRange = me ? (me.flameRange || 1) : 1;
+
+  const powerupTracker = h(
+    "div",
+    { className: "powerup-tracker-bar" },
+    h("div", { className: "powerup-tracker-title" }, "Your Stats & Powerups"),
+    h("div", { className: "powerup-tracker-stats" },
+      h("div", { className: "powerup-stat-card powerup-stat-bombs" },
+        h("span", { className: "powerup-stat-icon" }, "💣"),
+        h("div", { className: "powerup-stat-info" },
+          h("span", { className: "powerup-stat-label" }, "Max Bombs"),
+          h("strong", { className: "powerup-stat-value" }, bombLimit)
+        )
+      ),
+      h("div", { className: "powerup-stat-card powerup-stat-flames" },
+        h("span", { className: "powerup-stat-icon" }, "🔥"),
+        h("div", { className: "powerup-stat-info" },
+          h("span", { className: "powerup-stat-label" }, "Flame Range"),
+          h("strong", { className: "powerup-stat-value" }, flameRange)
+        )
+      ),
+      h("div", { className: "powerup-stat-card powerup-stat-speed" },
+        h("span", { className: "powerup-stat-icon" }, "⚡"),
+        h("div", { className: "powerup-stat-info" },
+          h("span", { className: "powerup-stat-label" }, "Speed"),
+          h("strong", { className: "powerup-stat-value" }, `Tier ${speedTier}`)
+        )
+      )
+    )
+  );
 
   const tiles = [];
   if (map.length > 0) {
@@ -36,6 +70,7 @@ export function GameScreen({ game, messages, chatText, setChatText, sendChat }) 
         h("p", { className: "eyebrow" }, "Match in progress"),
         h("h2", null, "Arena")
       ),
+      powerupTracker,
       h(
         "div",
         {

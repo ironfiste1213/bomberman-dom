@@ -26,6 +26,37 @@ export default class PlayerSystem {
                 }
             }
         }
+
+        // Powerup pickup detection
+        if (state.powerups.length > 0) {
+            const toRemove = new Set();
+            for (const powerup of state.powerups) {
+                for (const player of state.players.values()) {
+                    if (!player.alive) continue;
+                    if (
+                        Math.floor(player.x) === powerup.x &&
+                        Math.floor(player.y) === powerup.y
+                    ) {
+                        PlayerSystem.applyPowerUp(player, powerup.type);
+                        toRemove.add(powerup.id);
+                        break; // one pickup per powerup
+                    }
+                }
+            }
+            if (toRemove.size > 0) {
+                state.powerups = state.powerups.filter((p) => !toRemove.has(p.id));
+            }
+        }
+    }
+
+    static applyPowerUp(player, type) {
+        if (type === "bombs") {
+            player.bombLimit += 1;
+        } else if (type === "flames") {
+            player.flameRange += 1;
+        } else if (type === "speed") {
+            player.speed = Math.min(player.speed + 0.03, 0.25);
+        }
     }
 
     static canMove(state, x, y) {
@@ -34,4 +65,4 @@ export default class PlayerSystem {
         const tile = state.map.getTile(tileX, tileY);
         return tile === ".";
     }
-}
+}

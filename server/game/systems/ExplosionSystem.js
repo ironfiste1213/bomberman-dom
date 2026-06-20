@@ -1,4 +1,8 @@
 import Explosion from "../entities/explosion.js";
+import PowerUp from "../entities/powerUP.js";
+
+const POWERUP_TYPES = ["bombs", "flames", "speed"];
+const POWERUP_SPAWN_CHANCE = 0.35;
 
 export default class ExplosionSystem {
     static update(state, recentDeaths = []) {
@@ -43,6 +47,11 @@ export default class ExplosionSystem {
             for (const { x, y } of tilesToAffect) {
                 if (state.map.isDestructible(x, y)) {
                     state.map.blockDead(x, y);
+                    // 35% chance to spawn a powerup when a block is destroyed
+                    if (Math.random() < POWERUP_SPAWN_CHANCE) {
+                        const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+                        state.powerups.push(new PowerUp(crypto.randomUUID(), x, y, type));
+                    }
                 }
 
                 state.explosions.push(

@@ -31,7 +31,7 @@ export default class Game {
     setPlayerInput(playerId, input) {
         const player = this.state.players.get(playerId);
         if (!player || !input) return;
-        if (!player.alive) return 
+        if (!player.alive) return
 
         player.input = {
             up: Boolean(input.up),
@@ -65,7 +65,10 @@ export default class Game {
                 y: player.y,
                 lives: player.lives,
                 alive: player.alive,
-                spawn: player.spawn
+                spawn: player.spawn,
+                speed: player.speed,
+                bombLimit: player.bombLimit,
+                flameRange: player.flameRange
             })),
             map: {
                 width: this.state.map.width,

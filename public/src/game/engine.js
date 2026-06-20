@@ -11,6 +11,7 @@ export const engine = {
   playerElems: {},
   bombElems: {},
   explosionElems: {},
+  powerupElems: {},
   inputBound: false,
   sendInput: null,
 
@@ -20,6 +21,7 @@ export const engine = {
     this.playerElems = {};
     this.bombElems = {};
     this.explosionElems = {};
+    this.powerupElems = {};
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
@@ -44,9 +46,13 @@ export const engine = {
     for (const el of Object.values(this.explosionElems)) {
       el.remove();
     }
+    for (const el of Object.values(this.powerupElems)) {
+      el.remove();
+    }
     this.playerElems = {};
     this.bombElems = {};
     this.explosionElems = {};
+    this.powerupElems = {};
     this.sendInput = null;
   },
 
@@ -212,6 +218,32 @@ export const engine = {
           if (!activeExplosionIds.has(id)) {
             this.explosionElems[id].remove();
             delete this.explosionElems[id];
+          }
+        }
+
+        // Render/update powerups
+        const activePowerupIds = new Set();
+        for (const pu of state.powerups || []) {
+          activePowerupIds.add(pu.id);
+          let el = this.powerupElems[pu.id];
+          if (!el) {
+            el = document.createElement("div");
+            el.className = `powerup-sprite powerup-${pu.type}`;
+            el.title = pu.type;
+            arena.appendChild(el);
+            this.powerupElems[pu.id] = el;
+          }
+          el.style.left = `${((pu.x + 0.5) / MAP_COLS) * 100}%`;
+          el.style.top = `${((pu.y + 0.5) / MAP_ROWS) * 100}%`;
+          el.style.width = `${(1 / MAP_COLS) * 100}%`;
+          el.style.height = `${(1 / MAP_ROWS) * 100}%`;
+        }
+
+        // Clean up collected/removed powerups
+        for (const id of Object.keys(this.powerupElems)) {
+          if (!activePowerupIds.has(id)) {
+            this.powerupElems[id].remove();
+            delete this.powerupElems[id];
           }
         }
       }

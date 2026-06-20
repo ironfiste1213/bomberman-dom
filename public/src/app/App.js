@@ -1,20 +1,20 @@
 import {
   h,
 
-  useEffect,useRef,useState,
+  useEffect, useRef, useState,
 
-  initRouter,navigate,ROUTES,
-    
-  engine, resolveRoute,emptyLobby,
-  
-  normalizeGameOverPayload,normalizeLobby,
-  
-  Header,BlockedScreen,GameScreen,
-  
-  LobbyScreen,NicknameScreen,NotFoundScreen,
-  
+  initRouter, navigate, ROUTES,
+
+  engine, resolveRoute, emptyLobby,
+
+  normalizeGameOverPayload, normalizeLobby,
+
+  Header, BlockedScreen, GameScreen,
+
+  LobbyScreen, NicknameScreen, NotFoundScreen,
+
   ResultScreen
- 
+
 } from "./dependencies.js";
 
 function createWebSocketUrl() {
@@ -56,9 +56,9 @@ export function App() {
 
     workerRef.current = worker;
 
-      // on message : recieve from our worker
+    // on message : recieve from our worker
 
-      // post message : send to our worker
+    // post message : send to our worker
 
     worker.onmessage = (event) => {
 
@@ -67,7 +67,7 @@ export function App() {
 
       const payload = message.payload || {};
 
-        // parse and decide
+      // parse and decide
       switch (message.type) {
 
         case "connection:open":
@@ -148,7 +148,8 @@ export function App() {
               ...currentGame,
               players: payload.players,
               bombs: payload.bombs,
-              explosions: payload.explosions
+              explosions: payload.explosions,
+              powerups: payload.powerups
             };
           });
           break;
@@ -308,54 +309,55 @@ export function App() {
     error ? h("p", { className: "notice", role: "alert" }, error) : null,
     blocked
       ? BlockedScreen({
-          blocked,
-          retry: () => {
-            setBlocked(null);
-            setError("");
-            navigate(ROUTES.NICKNAME);
-          }
-        })
+        blocked,
+        retry: () => {
+          setBlocked(null);
+          setError("");
+          navigate(ROUTES.NICKNAME);
+        }
+      })
       : null,
     !blocked && activeRoute === ROUTES.NICKNAME
       ? NicknameScreen({
-          nickname,
-          setNickname,
-          joinLobby,
-          connection
-        })
+        nickname,
+        setNickname,
+        joinLobby,
+        connection
+      })
       : null,
     !blocked && activeRoute === ROUTES.LOBBY
       ? LobbyScreen({
-          lobby,
-          messages,
-          chatText,
-          setChatText,
-          sendChat,
-          now,
-          connection
-        })
+        lobby,
+        messages,
+        chatText,
+        setChatText,
+        sendChat,
+        now,
+        connection
+      })
       : null,
     !blocked && activeRoute === ROUTES.GAME
       ? GameScreen({
-          game,
-          messages,
-          chatText,
-          setChatText,
-          sendChat
-        })
+        game,
+        messages,
+        chatText,
+        setChatText,
+        sendChat,
+        currentPlayerId: connection.id
+      })
       : null,
     !blocked && activeRoute === ROUTES.WINNER
       ? ResultScreen({
-          matchResult,
-          currentPlayerId: connection.id,
-          navigateToNickname: returnToNickname
-        })
+        matchResult,
+        currentPlayerId: connection.id,
+        navigateToNickname: returnToNickname
+      })
       : null,
     !blocked && activeRoute === "not-found"
       ? NotFoundScreen({
-          route,
-          navigateToNickname: () => navigate(ROUTES.NICKNAME)
-        })
+        route,
+        navigateToNickname: () => navigate(ROUTES.NICKNAME)
+      })
       : null
   );
 }
