@@ -71,8 +71,25 @@ export const engine = {
         keys.bomb = false;
       }
     };
+ 
+    const resetKeys = () => {
+      let changed = false;
+      for (const k of Object.keys(keys)) {
+        if (keys[k]) {
+          keys[k] = false;
+          changed = true;
+        }
+      }
+      if (changed) {
+        push();
+      }
+    };
 
     window.addEventListener("keydown", (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+        resetKeys();
+        return;
+      }
       const dir = KEY_MAP[e.key];
       if (!dir) return;
       e.preventDefault();
@@ -82,6 +99,10 @@ export const engine = {
     });
 
     window.addEventListener("keyup", (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+        resetKeys();
+        return;
+      }
       const dir = KEY_MAP[e.key];
       if (!dir) return;
       e.preventDefault();
