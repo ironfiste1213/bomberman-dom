@@ -240,6 +240,11 @@ h2 {
   border-color: rgba(105, 167, 255, 0.42);
 }
 
+.result-pending {
+  background: rgba(240, 200, 90, 0.1);
+  border-color: rgba(240, 200, 90, 0.35);
+}
+
 .result-list {
   display: grid;
   gap: 10px;
@@ -264,6 +269,23 @@ h2 {
 .result-row small {
   color: var(--muted);
   text-transform: capitalize;
+}
+
+.result-pending .result-badge {
+  animation: pulse-result 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-result {
+  0%,
+  100% {
+    opacity: 0.68;
+    transform: translateY(0);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
 }
 
 .panel-copy p:last-child {
