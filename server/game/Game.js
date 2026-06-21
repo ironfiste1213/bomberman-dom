@@ -25,6 +25,7 @@ export default class Game {
             player.y = lobbyPlayer.spawn.y;
             player.spawn = lobbyPlayer.spawn;
             this.state.players.set(player.id, player);
+            this.matchPlayers.set(player.id, this.createMatchPlayer(player));
         }
 
         return this.state.map.grid;
@@ -45,6 +46,15 @@ export default class Game {
     }
 
     removePlayer(playerId) {
+        const player = this.state.players.get(playerId);
+        if (player) {
+            this.matchPlayers.set(playerId, {
+                ...this.createMatchPlayer(player),
+                alive: false,
+                result: player.alive === false ? "loser" : "disconnected"
+            });
+        }
+
         this.state.players.delete(playerId);
         return this.checkForGameOver("disconnect");
     }
@@ -55,9 +65,78 @@ export default class Game {
         PlayerSystem.update(this.state);
         BombSystem.update(this.state);
         ExplosionSystem.update(this.state, recentDeaths);
+
+        return this.checkForGameOver("last_player_standing");
     }
 
+    checkForGameOver(reason) {
+        if (this.ended) return null;
 
+        const alivePlayers = [...this.state.players.values()].filter((player) => player.alive !== false);
+        if (alivePlayers.length > 1) return null;
+
+        this.started = false;
+        this.ended = true;
+
+        const winner = alivePlayers[0] || null;
+
+        return {
+            winner: winner ? this.createResultPlayer(winner, "winner") : null,
+            players: [...this.matchPlayers.values()].map((record) =>
+                this.createResultPlayerFromRecord(record, winner)
+            ),
+            reason,
+            endedAt: Date.now()
+        };
+    }
+
+    createMatchPlayer(player) {
+        return {
+            id: player.id,
+            nickname: player.nickname,
+            playerNumber: player.playerNumber,
+            lives: player.lives,
+            alive: player.alive,
+            result: ""
+        };
+    }
+
+    createResultPlayer(player, result = "") {
+        return {
+            id: player.id,
+            nickname: player.nickname,
+            playerNumber: player.playerNumber,
+            lives: player.lives,
+            alive: player.alive,
+            result
+        };
+    }
+
+    createResultPlayerFromRecord(record, winner) {
+        if (!record) return null;
+
+        if (record.result === "disconnected") {
+            return { ...record, alive: false };
+        }
+
+        const currentPlayer = this.state.players.get(record.id);
+        if (!currentPlayer) {
+            return {
+                ...record,
+                alive: false,
+                result: record.result || "finished"
+            };
+        }
+
+        if (winner && currentPlayer.id === winner.id) {
+            return this.createResultPlayer(currentPlayer, "winner");
+        }
+
+        return this.createResultPlayer(
+            currentPlayer,
+            currentPlayer.alive === false ? "loser" : "finished"
+        );
+    }
 
     snapshot() {
         return {

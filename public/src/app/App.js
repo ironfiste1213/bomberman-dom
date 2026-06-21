@@ -193,9 +193,6 @@ export function App() {
           setBlocked(null);
           setError("");
           navigate(ROUTES.WINNER);
-          resultTimerRef.current = window.setTimeout(() => {
-            returnToNickname();
-          }, 3000);
           break;
 
         case "server:error":
