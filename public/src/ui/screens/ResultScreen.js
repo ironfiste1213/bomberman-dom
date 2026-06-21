@@ -6,10 +6,11 @@ export function ResultScreen({ matchResult, currentPlayerId, navigateToNickname 
   const winner = matchResult && matchResult.winner;
   const players = matchResult && Array.isArray(matchResult.players) ? matchResult.players : [];
   const currentPlayer = players.find((player) => player.id === currentPlayerId);
+  const isWaiting = !winner;
   const didWin = Boolean(winner && winner.id && winner.id === currentPlayerId);
   const didLose = Boolean(currentPlayer && (currentPlayer.result === "loser" || currentPlayer.alive === false));
-  const resultTone = didWin ? "win" : didLose ? "lose" : "neutral";
-  const title = didWin ? "You won" : didLose ? "You were eliminated" : "Match complete";
+  const resultTone = isWaiting ? "pending" : didWin ? "win" : didLose ? "lose" : "neutral";
+  const title = isWaiting ? "Waiting for result" : didWin ? "You won" : didLose ? "You were eliminated" : "Match complete";
   const winnerName = displayPlayerName(winner);
   const winnerNumber = winner && winner.playerNumber ? `P${winner.playerNumber}` : "";
   const reason = resultReasonLabel(matchResult && matchResult.reason);
@@ -20,18 +21,18 @@ export function ResultScreen({ matchResult, currentPlayerId, navigateToNickname 
     h("div", { className: "panel-copy" },
       h("p", { className: "eyebrow" }, "Match result"),
       h("h2", null, title),
-      h("p", null, winnerName
-        ? `${winnerNumber ? `${winnerNumber} - ` : ""}${winnerName} wins. ${reason}`
-        : "The match ended. Waiting for final winner details from the backend.")
+      h("p", null, isWaiting
+        ? "The match ended. Waiting for the backend game-over payload."
+        : `${winnerNumber ? `${winnerNumber} - ` : ""}${winnerName} wins. ${reason}`)
     ),
     h(
       "div",
       { className: `result-card result-${resultTone}` },
-      h("span", { className: "result-badge" }, didWin ? "Winner" : didLose ? "Eliminated" : "Complete"),
+      h("span", { className: "result-badge" }, isWaiting ? "Pending" : didWin ? "Winner" : didLose ? "Eliminated" : "Complete"),
       currentPlayer
         ? h("strong", null, `Your result: ${displayPlayerName(currentPlayer)}`)
         : h("strong", null, "Spectator result"),
-      h("small", null, winnerName ? `Winner: ${winnerName}` : "Winner data unavailable")
+      h("small", null, isWaiting ? "Waiting for match outcome" : `Winner: ${winnerName}`)
     ),
     players.length
       ? h(
