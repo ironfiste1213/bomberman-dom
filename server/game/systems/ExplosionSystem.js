@@ -73,7 +73,7 @@ export default class ExplosionSystem {
 
                 // Damage players on the explosion tile (initial hit)
                 for (const player of state.players.values()) {
-                    if (Math.floor(player.x) === x && Math.floor(player.y) === y) {
+                    if (Math.floor(player.x + 0.5) === x && Math.floor(player.y + 0.5) === y) {
                         ExplosionSystem.damagePlayer(state, player, hitSet, recentDeaths);
                         if (explosion.hitPlayerIds) explosion.hitPlayerIds.add(player.id);
                     }
@@ -100,8 +100,8 @@ export default class ExplosionSystem {
                 if (explosion.hitPlayerIds.has(player.id)) continue;
 
                 if (
-                    Math.floor(player.x) === explosion.x &&
-                    Math.floor(player.y) === explosion.y
+                    Math.floor(player.x + 0.5) === explosion.x &&
+                    Math.floor(player.y + 0.5) === explosion.y
                 ) {
                     ExplosionSystem.damagePlayer(state, player, hitSet, recentDeaths);
                     explosion.hitPlayerIds.add(player.id);

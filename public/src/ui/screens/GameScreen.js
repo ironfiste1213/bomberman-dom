@@ -10,7 +10,6 @@ export function GameScreen({ game, messages, chatText, setChatText, sendChat, cu
   const speedTier = me ? Math.round(((me.speed || 0.1) - 0.1) / 0.03) + 1 : 1;
   const bombLimit = me ? (me.bombLimit || 1) : 1;
   const flameRange = me ? (me.flameRange || 1) : 1;
-  const flameCharges = me ? (me.flameCharges || 0) : 0;
 
   const powerupTracker = h(
     "div",
@@ -27,9 +26,8 @@ export function GameScreen({ game, messages, chatText, setChatText, sendChat, cu
       h("div", { className: "powerup-stat-card powerup-stat-flames" },
         h("span", { className: "powerup-stat-icon" }, "🔥"),
         h("div", { className: "powerup-stat-info" },
-          h("span", { className: "powerup-stat-label" }, "Flame Charges"),
-          h("strong", { className: "powerup-stat-value" }, flameCharges),
-          h("span", { className: "powerup-stat-label" }, `Bomb range: ${flameRange}`)
+          h("span", { className: "powerup-stat-label" }, "Flame Range"),
+          h("strong", { className: "powerup-stat-value" }, flameRange)
         )
       ),
       h("div", { className: "powerup-stat-card powerup-stat-speed" },

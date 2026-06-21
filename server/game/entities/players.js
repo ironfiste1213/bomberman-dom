@@ -11,7 +11,6 @@ export default class Player {
         this.bombLimit = 1;
         this.activeBombs = 0;
         this.flameRange = 1;
-        this.flameCharges = 0;
         this.input = {
             up: false,
             down: false,
