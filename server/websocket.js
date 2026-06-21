@@ -7,11 +7,11 @@ const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 // WebSocket frames have numeric operation codes.
 // For this project we mainly need text frames, ping/pong, and close.
 const OPCODES = {
-  CONTINUATION: 0x0,
-  TEXT: 0x1,
-  CLOSE: 0x8,
-  PING: 0x9,
-  PONG: 0xa
+  CONTINUATION: 0x0, //0x0 = 00000000₂
+  TEXT: 0x1, //0x1 = 00000001₂
+  CLOSE: 0x8, // 0x8 = 00001000₂
+  PING: 0x9, // 0x9 = 00001001₂
+  PONG: 0xa // 0xA = 00001010₂
 };
 
 const VALID_CLIENT_OPCODES = new Set([
@@ -142,7 +142,20 @@ function createConnection(socket) {
     }
   };
 }
-
+/*
+0                   1                   2                   3
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-------+-+-------------+-------------------------------+
+|F|R|R|R| opcode|M| Payload len | Extended payload length       |
+|I|S|S|S|  (4)  |A|     (7)     | (16 or 64 bits if needed)     |
+|N|V|V|V|       |S|             |                               |
+| |1|2|3|       |K|             |                               |
++-+-+-+-+-------+-+-------------+-------------------------------+
+| Masking key (32 bits, if MASK=1)                              |
++---------------------------------------------------------------+
+| Payload Data                                                  |
++---------------------------------------------------------------+
+*/
 // Reads WebSocket frames from a buffer.
 // Returns complete frames plus any remaining incomplete bytes.
 function parseFrames(buffer) {
@@ -156,11 +169,11 @@ function parseFrames(buffer) {
 
     // RFC 6455 requires client-to-server frames to be final, masked, and
     // free of reserved extensions unless the server negotiated them.
-    const fin = (firstByte & 0x80) === 0x80;
-    const reservedBits = firstByte & 0x70;
+    const fin = (firstByte & 0x80) === 0x80; // 10000000   (0x80)
+    const reservedBits = firstByte & 0x70; // 0x70 = 01110000₂
 
     // Lower 4 bits of first byte are the opcode.
-    const opcode = firstByte & 0x0f;
+    const opcode = firstByte & 0x0f; // 0x0F = 00001111₂
 
     if (reservedBits !== 0) {
       throw new Error("WebSocket reserved bits are not supported");
@@ -182,7 +195,7 @@ function parseFrames(buffer) {
     }
 
     // Lower 7 bits of second byte are either the length or a length marker.
-    let payloadLength = secondByte & 0x7f;
+    let payloadLength = secondByte & 0x7f; // 0x7F = 01111111₂
     let headerLength = 2;
 
     // 126 means the real length is stored in the next 2 bytes.
