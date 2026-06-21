@@ -434,6 +434,25 @@ h2 {
   grid-template-columns: 1fr auto;
 }
 
+.elimination-banner {
+  background: rgba(255, 107, 93, 0.12);
+  border: 1px solid rgba(255, 107, 93, 0.38);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+}
+
+.elimination-banner strong {
+  color: #ffd6d1;
+  font-size: 1rem;
+}
+
+.elimination-banner p {
+  color: var(--muted);
+  margin-bottom: 0;
+}
+
 .arena-preview {
   aspect-ratio: 15 / 13;
   background: #080d0b;
@@ -444,6 +463,10 @@ h2 {
   position: relative;
   width: 100%;
   overflow: hidden;
+}
+
+.arena-preview-eliminated {
+  filter: saturate(0.72);
 }
 
 .tile {
