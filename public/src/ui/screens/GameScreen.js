@@ -7,6 +7,7 @@ export function GameScreen({ game, messages, chatText, setChatText, sendChat, cu
   const map = game && Array.isArray(game.map) ? game.map : [];
 
   const me = currentPlayerId ? players.find((p) => p.id === currentPlayerId) : null;
+  const isEliminated = Boolean(me && me.alive === false);
   const speedTier = me ? Math.round(((me.speed || 0.1) - 0.1) / 0.03) + 1 : 1;
   const bombLimit = me ? (me.bombLimit || 1) : 1;
   const flameRange = me ? (me.flameRange || 1) : 1;
@@ -67,15 +68,22 @@ export function GameScreen({ game, messages, chatText, setChatText, sendChat, cu
       "div",
       { className: "panel arena-panel" },
       h("div", { className: "section-heading" },
-        h("p", { className: "eyebrow" }, "Match in progress"),
-        h("h2", null, "Arena")
+        h("p", { className: "eyebrow" }, isEliminated ? "Eliminated" : "Match in progress"),
+        h("h2", null, isEliminated ? "Spectator view" : "Arena")
       ),
-      powerupTracker,
+      isEliminated
+        ? h(
+            "div",
+            { className: "elimination-banner" },
+            h("strong", null, "You were eliminated."),
+            h("p", null, "Stay here to watch the rest of the match while the surviving players continue.")
+          )
+        : powerupTracker,
       h(
         "div",
         {
           id: "arena",
-          className: "arena-preview",
+          className: `arena-preview${isEliminated ? " arena-preview-eliminated" : ""}`,
           style: `position: relative; display: grid; grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, 1fr); gap: 0;`
         },
         ...tiles

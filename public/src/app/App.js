@@ -48,6 +48,11 @@ export function App() {
     initRouter(setRoute, { mode: "hash" });
   }, []);
 
+  const resetChatState = () => {
+    setMessages([]);
+    setChatText("");
+  };
+
   // connect with our didecated worker
 
   useEffect(() => {
@@ -119,6 +124,9 @@ export function App() {
           setLobby(nextLobby);
 
           if (currentPlayer && !nextLobby.gameStarted) {
+            if (matchResult) {
+              resetChatState();
+            }
             setJoinedNickname(currentPlayer.nickname || "");
             setMatchResult(null);
             setBlocked(null);
@@ -157,6 +165,7 @@ export function App() {
 
         case "server:game-start":
 
+          resetChatState();
           setGame(payload);
           setMatchResult(null);
 
@@ -176,6 +185,7 @@ export function App() {
         case "server:game-over":
 
           engine.stop();
+          resetChatState();
           setGame(null);
           setMatchResult(normalizeGameOverPayload(payload));
           setJoinedNickname("");
@@ -298,6 +308,7 @@ export function App() {
       setMatchResult(null);
     }
 
+    resetChatState();
     setJoinedNickname("");
     setLobby(emptyLobby());
     setGame(null);

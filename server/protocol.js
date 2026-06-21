@@ -19,9 +19,6 @@ export const SERVER_MESSAGES = {
   // Sent when the match ends.
   GAME_OVER: "game:over",
 
-  // Sent when a player loses a life.
-  PLAYER_DIED: "player:died",
-
   // Sent when the client sends something invalid or the action is refused.
   ERROR: "error"
 };
@@ -69,4 +66,3 @@ export const SPAWNS = [
 export const MAP_CONFIG = {
   DEFAULT_DENSITY: 0.35
 };
-
