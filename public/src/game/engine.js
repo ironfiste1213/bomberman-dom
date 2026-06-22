@@ -232,6 +232,7 @@ export const engine = {
           el.style.left = `${((p.x + 0.5) / MAP_COLS) * 100}%`;
           el.style.top  = `${((p.y + 0.5) / MAP_ROWS) * 100}%`;
           el.style.display = p.alive ? "inline-flex" : "none";
+          el.classList.toggle("immune", Boolean(p.immune));
         }
 
         // construct bomb models, scale them, and position them on corresponding grid coordinates

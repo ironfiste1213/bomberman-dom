@@ -119,9 +119,15 @@ export default class ExplosionSystem {
     static damagePlayer(state, player, hitSet, recentDeaths) {
         if (!player || player.alive !== true) return;
         if (hitSet.has(player.id)) return;
+        
+        const now = Date.now();
+        if (player.immunityUntil && now < player.immunityUntil) {
+            return;
+        }
 
         hitSet.add(player.id);
         player.lives -= 1;
+        player.immunityUntil = now + 1000; // 1 second of immunity
 
         if (player.lives <= 0) {
             player.alive = false;

@@ -531,6 +531,22 @@ h2 {
   z-index: 10;
 }
 
+.player-sprite.immune {
+  animation: player-blink 0.15s infinite alternate;
+  box-shadow: 0 0 12px var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+@keyframes player-blink {
+  0% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0.95;
+  }
+}
+
+
 .bomb-sprite {
   position: absolute;
   transform: translate(-50%, -50%);

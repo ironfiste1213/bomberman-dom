@@ -151,7 +151,8 @@ export default class Game {
                 spawn: player.spawn,
                 speed: player.speed,
                 bombLimit: player.bombLimit,
-                flameRange: player.flameRange
+                flameRange: player.flameRange,
+                immune: player.immunityUntil ? player.immunityUntil > Date.now() : false
             })),
             map: {
                 width: this.state.map.width,
