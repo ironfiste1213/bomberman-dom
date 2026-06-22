@@ -129,7 +129,7 @@ function handleMessage(client, rawMessage) {
 function joinLobby(client, nickname) {
   // This first version supports one match per server process.
   // Later we can add rooms if we want multiple matches at the same time.
-  if (gameStarted) {
+  if (gameStarted || countdownTimer || countdownEndsAt) {
     sendError(client, "GAME_ALREADY_STARTED", "Game already started. Wait for the next match.");
     return;
   }
