@@ -145,8 +145,10 @@ export function App() {
           break;
 
         case "server:game-tick":
+          // save the server game tick data inside the engine and update UI state for player count and HUD stats
           engine.gameState = payload;
           setGame((currentGame) => {
+            // structure the game state mapping so that player positions, active bombs, powerups, and explosions are tracked
             if (!currentGame) {
               return {
                 ...payload,
@@ -169,8 +171,10 @@ export function App() {
           setGame(payload);
           setMatchResult(null);
 
+          // route client user interface to the active gameplay view
           navigate(ROUTES.GAME);
 
+          // initialize the engine, build the tiles, and configure inputs sending player controls to the WebSocket
           engine.start({
 
             map: payload.map,
@@ -184,6 +188,7 @@ export function App() {
 
         case "server:game-over":
 
+          // shut down the engine rendering loop and clean up all DOM game sprites
           engine.stop();
           resetChatState();
           setGame(null);
