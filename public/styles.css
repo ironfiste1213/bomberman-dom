@@ -29,13 +29,30 @@ body,
 body {
   margin: 0;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     radial-gradient(circle at 80% 0%, rgba(240, 200, 90, 0.16), transparent 32rem),
     var(--bg);
-  background-size: 32px 32px, 32px 32px, auto, auto;
   color: var(--text);
   font-family: "Trebuchet MS", Verdana, sans-serif;
+}
+
+/* Animated grid layer — uses transform so it runs on the GPU compositor
+   with zero main-thread repaints, keeping the frame loop alive at 60fps. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -32px; /* oversize by 1 tile so scrolling never reveals a gap */
+  z-index: -1;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+  will-change: transform;
+  animation: bg-grid-scroll 12s linear infinite;
+}
+
+@keyframes bg-grid-scroll {
+  from { transform: translate(0, 0); }
+  to   { transform: translate(32px, 32px); }
 }
 
 button,
